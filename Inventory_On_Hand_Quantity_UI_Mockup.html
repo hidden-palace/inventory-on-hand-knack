@@ -1,0 +1,112 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Inventory Item Details - Mockup</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f4f4;margin:20px}
+.card{background:#fff;border:1px solid #ccc;border-radius:8px;padding:16px;margin-bottom:16px}
+h1,h2{margin-top:0}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #ddd;padding:8px;text-align:left}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.badge{display:inline-block;background:#eee;padding:4px 8px;border-radius:4px;margin-right:6px}
+.filter input,.filter select{padding:6px;margin:4px}
+button{padding:8px 14px}
+</style>
+</head>
+<body>
+<h1>Inventory Item Details / On Hand Quantity</h1>
+
+<div class="card">
+<h2>Item Header</h2>
+<div class="grid">
+<div>
+<p><b>Photo:</b> [Image]</p>
+<p><b>Product:</b> White Ecuadorian Rose 60cm</p>
+<p><b>SKU:</b> ROS-WHT-060</p>
+<p><b>Barcode:</b> 123456789012</p>
+<p><b>Category:</b> Fresh Flowers</p>
+</div>
+<div>
+<p><b>Vendor:</b> ABC Farms</p>
+<p><b>Unit:</b> Stem</p>
+<p><b>Status:</b> Active</p>
+<p><b>Reorder Point:</b> 200</p>
+<p><b>Reorder Qty:</b> 500</p>
+</div>
+</div>
+</div>
+
+<div class="card">
+<h2>Inventory Summary</h2>
+<table>
+<tr><th>Location</th><th>On Hand</th><th>Available</th></tr>
+<tr><td>Palmdale Warehouse</td><td>560</td><td>510</td></tr>
+<tr><td>Santa Monica</td><td>85</td><td>80</td></tr>
+<tr><td>Sherman Oaks</td><td>42</td><td>40</td></tr>
+<tr><th>Total</th><th>687</th><th>630</th></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>Cost Summary</h2>
+<p><b>Last Purchase Cost:</b> $1.45</p>
+<p><b>Inventory Value:</b> $996.15</p>
+</div>
+
+<div class="card">
+<h2>Alerts</h2>
+<span class="badge">Below Reorder Point</span>
+<span class="badge">Pending Transfer</span>
+<span class="badge">Negative Inventory</span>
+</div>
+
+<div class="card">
+<h2>Transaction History</h2>
+<div class="filter">
+<input placeholder="Item Name">
+<input placeholder="Barcode">
+<input placeholder="PO Number">
+<select><option>Location</option></select>
+<select><option>Transaction Type</option></select>
+<input placeholder="User">
+<input type="date"> <input type="date">
+</div>
+<table>
+<tr><th>Date</th><th>Txn #</th><th>Type</th><th>Reference</th><th>Source</th><th>Destination</th><th>In</th><th>Out</th><th>Balance</th><th>User</th><th>Notes</th></tr>
+<tr><td>7/1</td><td>TRX001</td><td>Purchase Receipt</td><td>PO101</td><td>-</td><td>Palmdale</td><td>200</td><td></td><td>700</td><td>Admin</td><td></td></tr>
+<tr><td>7/2</td><td>TRX002</td><td>Sale</td><td>SO201</td><td>Santa Monica</td><td>-</td><td></td><td>15</td><td>685</td><td>Jane</td><td></td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>Linked Documents</h2>
+<ul>
+<li>Purchase Order</li>
+<li>Receiving Record</li>
+<li>Sales Order</li>
+<li>Transfer Request</li>
+<li>Inventory Count</li>
+<li>Inventory Adjustment</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>Mobile Screen</h2>
+<p>After barcode scan:</p>
+<ul>
+<li>Product Header</li>
+<li>Location Quantities</li>
+<li>Total On Hand</li>
+<li>Available Quantity</li>
+<li>Last Purchase Cost (permission-based)</li>
+<li>Inventory Value (permission-based)</li>
+<li>Last 20 Transactions</li>
+</ul>
+<button>Scan Another Item</button>
+</div>
+
+</body>
+</html>
