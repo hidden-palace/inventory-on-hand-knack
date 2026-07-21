@@ -27,3 +27,7 @@ Then open <http://127.0.0.1:8765/index.html>.
 The application ID, view keys, and field mappings are defined in `knack-config.js`. The browser uses supported view-based Knack requests and does not contain the private API key.
 
 See `KNACK_SETUP.md` for the verified mappings, inventory calculations, security notes, and the current reserved-quantity limitation.
+
+## Native Knack deployment
+
+The production target is the Next-Gen Knack page `scene_475`, using Rich Text container `view_1015`. Install `knack-inventory-on-hand.js` and `knack-inventory-on-hand.css` in the corresponding Next-Gen custom-code editors. Both files are scoped to that page and do not modify other Knack screens.
