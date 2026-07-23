@@ -56,6 +56,21 @@
   function mapItem(record) {
     const f=config.fields.item; return { id:record.id, name:raw(record,f.name), photo:imageUrl(record,f.photoUrl) || imageUrl(record,f.photo), sku:raw(record,f.sku), barcode:String(raw(record,f.barcode) ?? "").trim(), category:raw(record,f.category), vendor:raw(record,f.vendor), unit:raw(record,f.unit), status:raw(record,f.status), reorderPoint:numeric(raw(record,f.reorderPoint)), reorderQuantity:f.reorderQuantity ? numeric(raw(record,f.reorderQuantity)) : null, lastPurchaseCost:numeric(raw(record,f.lastPurchaseCost)) };
   }
+  async function productPhoto(item) {
+    const productFields=config.fields.product;
+    const lookup=String(item.barcode || "").trim();
+    if (!lookup || !productFields?.potSku || !productFields?.photo) return "";
+    for (const view of config.views.productImages || []) {
+      try {
+        const product=(await api(view,[fieldFilter(productFields.potSku,"is",lookup)]))[0];
+        const photo=product ? imageUrl(product,productFields.photo) : "";
+        if (photo) return photo;
+      } catch {
+        // Product pages are role-specific; try the next permitted view.
+      }
+    }
+    return "";
+  }
   function mapTransaction(record) {
     const f=config.fields.transaction;
     return { date:raw(record,f.date), dateDisplay:record[f.date], number:raw(record,f.number), code:raw(record,f.code), itemCode:String(raw(record,f.itemCode) ?? "").trim(), sku:String(raw(record,f.sku) ?? "").trim(), type:raw(record,f.type), reference:raw(record,f.reference), source:raw(record,f.source), destination:raw(record,f.destination), quantity:numeric(raw(record,f.quantity)), unitCost:numeric(raw(record,f.unitCost)), user:raw(record,f.user), notes:raw(record,f.notes) };
@@ -108,6 +123,7 @@
       if (!itemRecord) throw new Error("No Price List item matched that Supplier SKU or OR SKU.");
       const detailRecord = await apiRecord(config.views.itemDetails, itemRecord.id);
       state.item=mapItem(detailRecord || itemRecord);
+      if (!state.item.photo) state.item.photo=await productPhoto(state.item);
       const transactionRecords = await api(config.views.transactions,[fieldFilter(f.transaction.sku,"is",state.item.sku)]);
       calculateInventory(transactionRecords.map(mapTransaction));
       render(); hideStatus();

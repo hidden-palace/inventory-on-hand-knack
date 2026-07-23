@@ -3,6 +3,10 @@
 
   const PAGE_KEY = "scene_475";
   const CONTAINER_VIEW_KEY = "view_1015";
+  const PRODUCT_LOOKUP_VIEW_KEY = "view_1019";
+  const lookupViewStyle = document.createElement("style");
+  lookupViewStyle.textContent = `#${PRODUCT_LOOKUP_VIEW_KEY} { display: none !important; }`;
+  document.head.appendChild(lookupViewStyle);
   const CONFIG = {
     applicationId: "6295c09d313de3001ea4047e",
     defaultItem: "UTC-CTR-003",
@@ -16,6 +20,11 @@
     views: {
       items: { scene: "scene_463", view: "view_1003" },
       itemDetails: { scene: "scene_464", view: "view_1004" },
+      productImages: [
+        { scene: "scene_475", view: PRODUCT_LOOKUP_VIEW_KEY },
+        { scene: "scene_35", view: "view_62" },
+        { scene: "scene_446", view: "view_977" }
+      ],
       transactions: { scene: "scene_470", view: "view_1008" }
     },
     fields: {
@@ -24,6 +33,9 @@
         barcode: "field_724", category: "field_727", vendor: "field_733",
         unit: "field_728", status: "field_738", reorderPoint: "field_749",
         reorderQuantity: "field_770", lastPurchaseCost: "field_730"
+      },
+      product: {
+        potSku: "field_82", photo: "field_78"
       },
       transaction: {
         itemCode: "field_753", sku: "field_761", date: "field_759",
@@ -204,6 +216,21 @@
         lastPurchaseCost: numeric(raw(source, fields.lastPurchaseCost))
       };
     }
+    async function productPhoto(item) {
+      const productFields = CONFIG.fields.product;
+      const lookup = String(item.barcode || "").trim();
+      if (!lookup || !productFields?.potSku || !productFields?.photo) return "";
+      for (const view of CONFIG.views.productImages || []) {
+        try {
+          const product = (await records(view, [filter(productFields.potSku, "is", lookup)]))[0];
+          const photo = product ? imageUrl(product, productFields.photo) : "";
+          if (photo) return photo;
+        } catch {
+          // Product pages are role-specific; try the next permitted view.
+        }
+      }
+      return "";
+    }
     function mapTransaction(source) {
       const fields = CONFIG.fields.transaction;
       return {
@@ -268,6 +295,7 @@
         if (!itemSource) throw new Error("No Price List item matched that Supplier SKU or OR SKU.");
         const details = await record(CONFIG.views.itemDetails, itemSource.id);
         state.item = mapItem(details || itemSource);
+        if (!state.item.photo) state.item.photo = await productPhoto(state.item);
         const transactionSources = await records(CONFIG.views.transactions, [filter(fields.transaction.sku, "is", state.item.sku)]);
         calculateInventory(transactionSources.map(mapTransaction));
         render();
