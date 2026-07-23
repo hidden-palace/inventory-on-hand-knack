@@ -54,7 +54,7 @@
     return response.ok ? await response.json() : null;
   }
   function mapItem(record) {
-    const f=config.fields.item; return { id:record.id, name:raw(record,f.name), photo:imageUrl(record,f.photo), sku:raw(record,f.sku), barcode:String(raw(record,f.barcode) ?? "").trim(), category:raw(record,f.category), vendor:raw(record,f.vendor), unit:raw(record,f.unit), status:raw(record,f.status), reorderPoint:numeric(raw(record,f.reorderPoint)), reorderQuantity:f.reorderQuantity ? numeric(raw(record,f.reorderQuantity)) : null, lastPurchaseCost:numeric(raw(record,f.lastPurchaseCost)) };
+    const f=config.fields.item; return { id:record.id, name:raw(record,f.name), photo:imageUrl(record,f.photoUrl) || imageUrl(record,f.photo), sku:raw(record,f.sku), barcode:String(raw(record,f.barcode) ?? "").trim(), category:raw(record,f.category), vendor:raw(record,f.vendor), unit:raw(record,f.unit), status:raw(record,f.status), reorderPoint:numeric(raw(record,f.reorderPoint)), reorderQuantity:f.reorderQuantity ? numeric(raw(record,f.reorderQuantity)) : null, lastPurchaseCost:numeric(raw(record,f.lastPurchaseCost)) };
   }
   function mapTransaction(record) {
     const f=config.fields.transaction;

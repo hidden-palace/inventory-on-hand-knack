@@ -16,10 +16,10 @@ window.INVENTORY_CONFIG = {
   },
   fields: {
     item: {
-      name:"field_721", photo:"field_739", sku:"field_725",
+      name:"field_721", photo:"field_739", photoUrl:"field_769", sku:"field_725",
       barcode:"field_724", category:"field_727", vendor:"field_733",
       unit:"field_728", status:"field_738", reorderPoint:"field_749",
-      reorderQuantity:"", lastPurchaseCost:"field_730"
+      reorderQuantity:"field_770", lastPurchaseCost:"field_730"
     },
     transaction: {
       itemCode:"field_753", sku:"field_761", date:"field_759",

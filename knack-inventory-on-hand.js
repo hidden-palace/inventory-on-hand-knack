@@ -20,10 +20,10 @@
     },
     fields: {
       item: {
-        name: "field_721", photo: "field_739", sku: "field_725",
+        name: "field_721", photo: "field_739", photoUrl: "field_769", sku: "field_725",
         barcode: "field_724", category: "field_727", vendor: "field_733",
         unit: "field_728", status: "field_738", reorderPoint: "field_749",
-        reorderQuantity: "", lastPurchaseCost: "field_730"
+        reorderQuantity: "field_770", lastPurchaseCost: "field_730"
       },
       transaction: {
         itemCode: "field_753", sku: "field_761", date: "field_759",
@@ -195,7 +195,8 @@
     function mapItem(source) {
       const fields = CONFIG.fields.item;
       return {
-        id: source.id, name: raw(source, fields.name), photo: imageUrl(source, fields.photo),
+        id: source.id, name: raw(source, fields.name),
+        photo: imageUrl(source, fields.photoUrl) || imageUrl(source, fields.photo),
         sku: raw(source, fields.sku), barcode: String(raw(source, fields.barcode) ?? "").trim(),
         category: raw(source, fields.category), vendor: raw(source, fields.vendor), unit: raw(source, fields.unit),
         status: raw(source, fields.status), reorderPoint: numeric(raw(source, fields.reorderPoint)),

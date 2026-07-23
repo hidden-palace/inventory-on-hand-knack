@@ -30,6 +30,13 @@ The schema inspection established that inventory items come from **Price List** 
 | Status | `field_738` |
 | Supplier | `field_733` |
 | Reorder Point | `field_749` |
+| Item Image URL | `field_769` |
+| Re-Order Quantity | `field_770` |
+
+The Item Image URL is preferred when present, with the original Item Image upload
+field retained as a fallback. Both new fields are exposed by the Price List
+details view (`scene_464` / `view_1004`) so they can be read safely from the
+browser without using the private object API.
 
 Supported view-based sources used by the frontend:
 
