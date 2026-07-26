@@ -1,4 +1,9 @@
-# Knack Inventory On-Hand
+# Knack Inventory Control
+
+This repository contains the production Knack integrations for Inventory On
+Hand, Inventory Lookup, Transfer Requests, Inventory Count, and Print Labels.
+All screens use login-protected Knack views and live records, with no fallback
+or demo data.
 
 A responsive inventory on-hand screen connected to live Knack Price List and Inventory Transactions views.
 
@@ -31,3 +36,8 @@ See `KNACK_SETUP.md` for the verified mappings, inventory calculations, security
 ## Native Knack deployment
 
 The production target is the Next-Gen Knack page `scene_475`, using Rich Text container `view_1015`. Install `knack-inventory-on-hand.js` and `knack-inventory-on-hand.css` in the corresponding Next-Gen custom-code editors. Both files are scoped to that page and do not modify other Knack screens.
+
+The four workflow screens use `knack-inventory-workflows.js` and
+`knack-inventory-workflows.css`. Their page, view, and field keys are scoped to
+the protected Inventory pages created for this application. The private Knack
+API key is never included in browser code.
