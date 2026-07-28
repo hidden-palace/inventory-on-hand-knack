@@ -35,6 +35,11 @@
       items: { scene: "scene_484", view: "view_1039" },
       transactions: { scene: "scene_484", view: "view_1040" },
       hidden: ["view_1037", "view_1038", "view_1039", "view_1040"]
+    },
+    scanner: {
+      scene: "scene_488", host: "view_1049",
+      addTransaction: { scene: "scene_470", view: "view_1012" },
+      hidden: []
     }
   };
   const FIELD = {
@@ -177,6 +182,23 @@
     } catch {
       return "Current user";
     }
+  }
+  async function currentUserRecord() {
+    try {
+      return globalThis.__inventoryUser || await Promise.race([
+        globalThis.Knack?.getUser?.(),
+        new Promise(resolve => setTimeout(() => resolve(null), 3000))
+      ]);
+    } catch {
+      return null;
+    }
+  }
+  function roleNames(user) {
+    const values = user?.roles || user?.role_names || user?.values?.roles || user?.values?.user_roles || [];
+    return (Array.isArray(values) ? values : [values])
+      .map(role => role?.name || role?.identifier || role?.label || role)
+      .filter(Boolean)
+      .map(String);
   }
   async function request(view, options = {}) {
     if (!view?.scene || !view?.view) throw new Error("This Knack view has not been configured.");
@@ -371,13 +393,9 @@
           <button type="button" data-transaction="damage"><strong>Report Damage</strong><span>Write off damaged inventory</span></button>
           <button type="button" data-transaction="adjust"><strong>Adjust Inventory</strong><span>Correct the recorded quantity</span></button>
         </div>`, `<button value="cancel">Close</button>`);
-        dialog.querySelector("[data-transaction='transfer']").addEventListener("click", () => {
-          location.href = `/jong/ft-dev/transfer-requests?sku=${encodeURIComponent(sku)}`;
-        });
-        dialog.querySelectorAll("[data-transaction]:not([data-transaction='transfer'])").forEach(button => {
+        dialog.querySelectorAll("[data-transaction]").forEach(button => {
           button.addEventListener("click", () => {
-            dialog.close();
-            status(root, `${button.querySelector("strong").textContent} selected. Open its scanner form from the Inventory Transactions workflow.`);
+            location.href = `/jong/ft-dev/scanner-menu?screen=${encodeURIComponent(button.dataset.transaction)}&sku=${encodeURIComponent(sku)}&location=${encodeURIComponent(locationSelect.value)}`;
           });
         });
       });
@@ -808,12 +826,237 @@
     } catch (error) { status(root, error.message || "Unable to load label sources.", true); }
   }
 
+  async function mountScanner(host) {
+    const params = new URLSearchParams(location.search);
+    const screen = params.get("screen") || "menu";
+    const transactionScreens = {
+      receive: {
+        eyebrow: "RECEIVE TRANSACTION", title: "Receive Stock", subtitle: "Warehouse Staff",
+        type: "Receiving Transaction", prefix: "RCV", locationLabel: "Location (receive into)",
+        quantityLabel: "Quantity received", extraLabel: "Reference # (PO)", extraPlaceholder: "Optional — PO / invoice",
+        saveLabel: "✓ Save Receive", direction: "in"
+      },
+      transfer: {
+        eyebrow: "TRANSFER TRANSACTION", title: "Transfer Out", subtitle: "Warehouse Staff",
+        type: "Inventory Transfer", prefix: "TRF", quantityLabel: "Quantity to transfer",
+        saveLabel: "✓ Save Transfer", direction: "transfer"
+      },
+      usage: {
+        eyebrow: "DEDUCT TRANSACTION", title: "Record Usage", subtitle: "Florist · Flower Shop",
+        type: "Order Usage", prefix: "USE", locationLabel: "Location (used from)",
+        quantityLabel: "Quantity used", extraLabel: "Order number", extraPlaceholder: "e.g. SO-10482",
+        saveLabel: "✓ Save Usage", direction: "out", extraRequired: true
+      },
+      damage: {
+        eyebrow: "DAMAGE TRANSACTION", title: "Report Damage", subtitle: "Warehouse / Store Staff",
+        type: "Damage", prefix: "DMG", locationLabel: "Location (written off from)",
+        quantityLabel: "Quantity damaged", extraLabel: "Reason", extraPlaceholder: "Why was it damaged?",
+        saveLabel: "✓ Save Damage", direction: "out", extraRequired: true, extraToNotes: true
+      },
+      adjust: {
+        eyebrow: "ADJUSTMENT TRANSACTION", title: "Adjust Inventory", subtitle: "Manager only",
+        type: "Cycle Count Adjustment", prefix: "ADJ", locationLabel: "Location (correcting)",
+        quantityLabel: "Adjustment (+/−)", extraLabel: "Reason", extraPlaceholder: "Reason for correction",
+        saveLabel: "✓ Save Adjustment", direction: "adjust", extraRequired: true, extraToNotes: true
+      }
+    };
+    const config = transactionScreens[screen];
+    host.innerHTML = config
+      ? base(config.title, config.eyebrow, "", "scanner")
+      : base("Main Menu", "MENU UI", "", "scanner-menu");
+    const root = host.querySelector(".iw-shell");
+    status(root, "Loading scanner...");
+    try {
+      const userRecord = await currentUserRecord();
+      const roles = roleNames(userRecord);
+      const isManager = roles.some(role => /general manager|manager/i.test(role));
+      const isDev = roles.some(role => /\bdev\b/i.test(role));
+      const isInventorist = roles.some(role => /inventorist/i.test(role));
+      const isSales = roles.some(role => /sales|florist/i.test(role));
+      const [itemRows, txRows, locationRows] = await Promise.all([
+        records(PAGE.lookup.items), records(PAGE.lookup.transactions), records(PAGE.lookup.locations)
+      ]);
+      const state = {
+        products: itemRows.map(item),
+        transactions: txRows.map(transaction),
+        locations: locationRows.map(mapLocation),
+        selected: null
+      };
+      const userName = userRecord?.name || userRecord?.email || userRecord?.values?.name || userRecord?.values?.email || "Current user";
+      const defaultLocation = state.locations[0]?.name || "Inventory";
+
+      if (!config) {
+        root.querySelector("[data-subtitle]").textContent = `${userName} · ${defaultLocation}`;
+        root.querySelector("[data-main]").innerHTML = `<div class="iw-main-menu">
+          <button data-new-transaction class="iw-menu-card iw-menu-card-primary"><span class="iw-menu-icon">＋</span><span><strong>New Transaction</strong><small>Receive · Transfer · Usage · Damage · Adjust</small></span></button>
+          <button data-route="/jong/ft-dev/inventory-lookup" class="iw-menu-card"><span class="iw-menu-icon">⌕</span><span><strong>Inventory Lookup</strong><small>Scan / search on-hand by location</small></span></button>
+          <button data-route="/jong/ft-dev/transfer-requests" class="iw-menu-card"><span class="iw-menu-icon">⇄</span><span><strong>Transfer Requests</strong><small>Create · approve · fulfill</small></span></button>
+          <button data-route="/jong/ft-dev/inventory-count" class="iw-menu-card"><span class="iw-menu-icon">▤</span><span><strong>Inventory Count</strong><small>Start or continue a cycle count</small></span></button>
+          <button data-route="/jong/ft-dev/print-labels" class="iw-menu-card"><span class="iw-menu-icon">◇</span><span><strong>Print Labels</strong><small>Print / reprint barcode labels</small></span></button>
+          <button data-route="/jong/ft-dev/manager-analytics" class="iw-menu-card" data-reports><span class="iw-menu-icon">▥</span><span><strong>Reports & Dashboard</strong><small>Role-based dashboard & reports</small></span></button>
+        </div>`;
+        const allowed = {
+          receive: isManager || isInventorist || isDev || !roles.length,
+          transfer: isManager || isInventorist || isDev || !roles.length,
+          usage: isManager || isSales || isDev || !roles.length,
+          damage: isManager || isInventorist || isSales || isDev || !roles.length,
+          adjust: isManager || isDev || !roles.length
+        };
+        root.querySelector("[data-reports]").hidden = !(isManager || isDev || !roles.length);
+        root.querySelector("[data-main]").addEventListener("click", event => {
+          const route = event.target.closest("[data-route]")?.dataset.route;
+          if (route) location.href = route;
+        });
+        root.querySelector("[data-new-transaction]").addEventListener("click", () => {
+          const options = [
+            ["receive", "Receive Stock", "Add inventory received at a location"],
+            ["transfer", "Transfer Out", "Move inventory between locations"],
+            ["usage", "Record Usage", "Deduct inventory used on an order"],
+            ["damage", "Report Damage", "Write off damaged inventory"],
+            ["adjust", "Adjust Inventory", "Correct the recorded quantity"]
+          ].filter(([key]) => allowed[key]).map(([key, label, description]) =>
+            `<button type="button" data-open-transaction="${key}"><strong>${label}</strong><span>${description}</span></button>`
+          ).join("");
+          const dialog = modal(root, "New Transaction", `<div class="iw-transaction-menu">${options}</div>`, `<button value="cancel">Close</button>`);
+          dialog.querySelectorAll("[data-open-transaction]").forEach(button => {
+            button.addEventListener("click", () => {
+              location.href = `/jong/ft-dev/scanner-menu?screen=${encodeURIComponent(button.dataset.openTransaction)}`;
+            });
+          });
+        });
+        status(root, "");
+        return;
+      }
+
+      root.querySelector("[data-subtitle]").textContent = config.subtitle;
+      const locationOptions = selectOptions(state.locations);
+      const extraField = config.extraLabel
+        ? `<label>${config.extraLabel}${config.extraRequired ? `<em>Required</em>` : `<em class="iw-optional">Optional</em>`}<input data-extra placeholder="${html(config.extraPlaceholder)}"></label>`
+        : "";
+      const locationFields = config.direction === "transfer"
+        ? `<label>Source location<em>Required</em><select data-source><option value="">Select location</option>${locationOptions}</select></label><label>Destination location<em>Required</em><select data-destination><option value="">Select location</option>${locationOptions}</select></label>`
+        : `<label>${config.locationLabel}<em>Required</em><select data-location><option value="">Select location</option>${locationOptions}</select></label>`;
+      root.querySelector("[data-main]").innerHTML = `<button data-back-menu class="iw-back-button">‹ Main Menu</button><div class="iw-transaction-form">
+        ${locationFields}
+        <label>Product<em>Required</em><div class="iw-product-scan"><input data-product-search autocomplete="off" placeholder="Scan product barcode"><button data-product-find type="button"><span aria-hidden="true">▥</span> Scan</button></div></label>
+        <article class="iw-scanned-product"><strong data-product-name>— product loads on scan —</strong><span>SKU: <b data-product-code>—</b></span><span>On hand: <b data-product-on-hand>—</b></span></article>
+        <label>${config.quantityLabel}<em>Required</em><input data-quantity class="iw-large-quantity" type="number" step="${config.direction === "adjust" ? "1" : "1"}" ${config.direction === "adjust" ? "" : "min=\"1\""} value="0"></label>
+        ${extraField}
+        <button data-save-transaction class="iw-success-button iw-full-button">${config.saveLabel}</button>
+        <div class="iw-auto-fields"><strong>Set automatically — not on screen</strong><span>Type = ${html(config.type)}</span><span>Unit Cost = product cost</span><span>Date = now</span><span>Employee = me</span><span>No. = ${config.prefix}-####</span></div>
+      </div>`;
+      root.querySelector("[data-back-menu]").addEventListener("click", () => {
+        location.href = "/jong/ft-dev/scanner-menu";
+      });
+      const sourceControl = root.querySelector("[data-source]") || root.querySelector("[data-location]");
+      const destinationControl = root.querySelector("[data-destination]");
+      const prefillLocation = params.get("location");
+      if (prefillLocation) {
+        const match = state.locations.find(row => row.name === prefillLocation || row.id === prefillLocation);
+        if (match && sourceControl) sourceControl.value = match.id;
+      } else if (sourceControl && state.locations[0]) {
+        sourceControl.value = state.locations[0].id;
+      }
+      const onHand = () => {
+        if (!state.selected) return 0;
+        const locationId = sourceControl?.value;
+        const locationRow = state.locations.find(row => row.id === locationId);
+        return balancesFor(state.selected, state.transactions, state.locations).locations
+          .find(row => row.name === locationRow?.name)?.onHand || 0;
+      };
+      const renderProduct = product => {
+        if (!product) return status(root, "No live Price List item matched that scan.", true);
+        state.selected = product;
+        root.querySelector("[data-product-name]").textContent = product.name;
+        root.querySelector("[data-product-code]").textContent = product.sku || product.supplierSku || product.barcode || "-";
+        root.querySelector("[data-product-on-hand]").textContent = number.format(onHand());
+        status(root, "");
+      };
+      const findScannedProduct = () => renderProduct(findProduct(state.products, root.querySelector("[data-product-search]").value));
+      root.querySelector("[data-product-find]").addEventListener("click", findScannedProduct);
+      root.querySelector("[data-product-search]").addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          findScannedProduct();
+        }
+      });
+      sourceControl?.addEventListener("change", () => {
+        if (state.selected) root.querySelector("[data-product-on-hand]").textContent = number.format(onHand());
+      });
+      const prefillSku = params.get("sku");
+      if (prefillSku) {
+        root.querySelector("[data-product-search]").value = prefillSku;
+        renderProduct(findProduct(state.products, prefillSku));
+      }
+      if (params.get("qty")) root.querySelector("[data-quantity]").value = params.get("qty");
+      if (params.get("reference") && root.querySelector("[data-extra]")) root.querySelector("[data-extra]").value = params.get("reference");
+
+      root.querySelector("[data-save-transaction]").addEventListener("click", async () => {
+        if (!state.selected) return status(root, "Scan a valid product first.", true);
+        const quantity = numeric(root.querySelector("[data-quantity]").value);
+        if (!quantity || (config.direction !== "adjust" && quantity < 0)) return status(root, "Enter a valid non-zero quantity.", true);
+        if (config.direction === "adjust" && roles.length && !(isManager || isDev)) {
+          return status(root, "Inventory adjustments require a Manager role.", true);
+        }
+        const sourceId = config.direction === "in" ? "" : sourceControl?.value;
+        const destinationId = config.direction === "in" ? sourceControl?.value : destinationControl?.value || "";
+        if (config.direction === "transfer") {
+          if (!sourceId || !destinationId || sourceId === destinationId) return status(root, "Choose two different locations.", true);
+        } else if (!sourceControl?.value) {
+          return status(root, "Choose a location.", true);
+        }
+        const available = onHand();
+        if (["out", "transfer"].includes(config.direction) && Math.abs(quantity) > available) {
+          return status(root, `Only ${number.format(available)} is available at the selected source.`, true);
+        }
+        const extra = root.querySelector("[data-extra]")?.value.trim() || "";
+        if (config.extraRequired && !extra) return status(root, `${config.extraLabel} is required.`, true);
+        const transactionCode = code(config.prefix);
+        const body = {
+          [FIELD.transaction.code]: transactionCode,
+          [FIELD.transaction.number]: Number(String(Date.now()).slice(-9)),
+          [FIELD.transaction.itemCode]: state.selected.barcode || state.selected.supplierSku || state.selected.sku,
+          [FIELD.transaction.type]: config.type,
+          [FIELD.transaction.quantity]: quantity,
+          [FIELD.transaction.cost]: state.selected.cost,
+          [FIELD.transaction.date]: knackDate(),
+          [FIELD.transaction.sku]: state.selected.sku
+        };
+        if (sourceId) body[FIELD.transaction.source] = sourceId;
+        if (destinationId) body[FIELD.transaction.destination] = destinationId;
+        if (extra && !config.extraToNotes) body[FIELD.transaction.reference] = extra;
+        if (extra && config.extraToNotes) body[FIELD.transaction.notes] = extra;
+        if (userRecord?.id) body[FIELD.transaction.user] = userRecord.id;
+        try {
+          root.querySelector("[data-save-transaction]").disabled = true;
+          await create(PAGE.scanner.addTransaction, body);
+          status(root, `${transactionCode} saved successfully.`);
+          root.querySelector("[data-product-search]").value = "";
+          root.querySelector("[data-quantity]").value = "0";
+          if (root.querySelector("[data-extra]")) root.querySelector("[data-extra]").value = "";
+          state.selected = null;
+          root.querySelector("[data-product-name]").textContent = "— product loads on scan —";
+          root.querySelector("[data-product-code]").textContent = "—";
+          root.querySelector("[data-product-on-hand]").textContent = "—";
+          root.querySelector("[data-product-search]").focus();
+        } catch (error) {
+          status(root, error.message || "Unable to save this transaction.", true);
+        } finally {
+          root.querySelector("[data-save-transaction]").disabled = false;
+        }
+      });
+      status(root, "");
+    } catch (error) {
+      status(root, error.message || "Unable to load the scanner.", true);
+    }
+  }
+
   function mount(name) {
     const config = PAGE[name];
     if (!document.getElementById(config.scene)) return;
     const host = document.getElementById(config.host);
     if (!host || host.querySelector(".iw-shell")) return;
-    ({ lookup: mountLookup, transfers: mountTransfers, counts: mountCounts, labels: mountLabels })[name](host);
+    ({ lookup: mountLookup, transfers: mountTransfers, counts: mountCounts, labels: mountLabels, scanner: mountScanner })[name](host);
   }
   function register() {
     Object.entries(PAGE).forEach(([name, config]) => {
