@@ -169,7 +169,10 @@
   }
   async function currentUser() {
     try {
-      const user = await globalThis.Knack?.getUser?.();
+      const user = globalThis.__inventoryUser || await Promise.race([
+        globalThis.Knack?.getUser?.(),
+        new Promise(resolve => setTimeout(() => resolve(null), 3000))
+      ]);
       return user?.name || user?.email || user?.values?.name || user?.values?.email || "Current user";
     } catch {
       return "Current user";
