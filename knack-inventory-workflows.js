@@ -141,7 +141,12 @@
     return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()} ${hour}:${minute} ${hours >= 12 ? "pm" : "am"}`;
   }
   async function token() {
-    if (globalThis.Knack?.getUserToken) return await globalThis.Knack.getUserToken();
+    const knack = globalThis.Knack;
+    if (knack?.getUserToken) return await knack.getUserToken();
+    if (knack?.getUser) {
+      const user = await knack.getUser();
+      return user?.token || user?.user_token || user?.session?.token || "";
+    }
     return "";
   }
   async function currentUser() {
