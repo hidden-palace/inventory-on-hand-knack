@@ -705,16 +705,22 @@
     root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><div class="iw-print-sheet" data-print-sheet aria-hidden="true"></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
-      const [itemRows, txRows] = await Promise.all([records(PAGE.labels.items), records(PAGE.labels.transactions)]);
+      const [itemRows, txRows, locationRows] = await Promise.all([
+        records(PAGE.labels.items), records(PAGE.labels.transactions), records(PAGE.lookup.locations)
+      ]);
       const state = { products: itemRows.map(item), transactions: txRows.map(transaction), queue: [] };
       const userName = await currentUser();
-      root.querySelector("[data-subtitle]").textContent = `${userName} · Inventory`;
-      const renderQueue = () => {
-        const queue = root.querySelector("[data-queue]");
-        queue.innerHTML = state.queue.map((entry, index) => `<div class="iw-queue-row"><span><strong>${html(entry.product.name)}</strong><small>Item code ${html(entry.product.sku || entry.product.supplierSku)}</small></span><input aria-label="Quantity for ${html(entry.product.name)}" data-qty-index="${index}" type="number" min="1" value="${entry.quantity}"><button data-remove="${index}" aria-label="Remove ${html(entry.product.name)}">×</button></div>`).join("") || `<p class="iw-empty">Scan an item to build the print queue.</p>`;
+      const activeLocations = locationRows.map(mapLocation);
+      root.querySelector("[data-subtitle]").textContent = `${userName} · ${activeLocations[0]?.name || "Inventory"}`;
+      const updatePrintSummary = () => {
         const total = state.queue.reduce((sum, entry) => sum + Math.max(1, Math.floor(entry.quantity)), 0);
         root.querySelector("[data-total-labels]").textContent = number.format(total);
         root.querySelector("[data-print]").textContent = total ? `Print ${number.format(total)} ${total === 1 ? "Label" : "Labels"}` : "Print Labels";
+      };
+      const renderQueue = () => {
+        const queue = root.querySelector("[data-queue]");
+        queue.innerHTML = state.queue.map((entry, index) => `<div class="iw-queue-row"><span><strong>${html(entry.product.name)}</strong><small>Item code ${html(entry.product.sku || entry.product.supplierSku)}</small></span><input aria-label="Quantity for ${html(entry.product.name)}" data-qty-index="${index}" type="number" min="1" value="${entry.quantity}"><button data-remove="${index}" aria-label="Remove ${html(entry.product.name)}">×</button></div>`).join("") || `<p class="iw-empty">Scan an item to build the print queue.</p>`;
+        updatePrintSummary();
         root.querySelector("[data-preview]").innerHTML = state.queue[0] ? labelMarkup(state.queue[0].product) : `<span>Barcode preview</span>`;
       };
       const addProduct = product => {
@@ -737,7 +743,10 @@
       root.querySelector("[data-search]").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); search(); } });
       root.querySelector("[data-clear]").addEventListener("click", () => { state.queue = []; renderQueue(); });
       root.querySelector("[data-queue]").addEventListener("input", event => {
-        if (event.target.dataset.qtyIndex != null) state.queue[Number(event.target.dataset.qtyIndex)].quantity = Math.max(1, numeric(event.target.value));
+        if (event.target.dataset.qtyIndex != null) {
+          state.queue[Number(event.target.dataset.qtyIndex)].quantity = Math.max(1, numeric(event.target.value));
+          updatePrintSummary();
+        }
       });
       root.querySelector("[data-queue]").addEventListener("click", event => {
         const button = event.target.closest("[data-remove]");
