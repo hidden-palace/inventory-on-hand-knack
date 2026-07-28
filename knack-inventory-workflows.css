@@ -196,12 +196,9 @@
 }
 .iw-label-preview strong { font-size: 19px; }
 .iw-label-preview span { color: #555; }
-.iw-bars {
-  width: 78%;
-  height: 68px;
-  margin: 12px;
-  background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 5px, #111 5px 8px, transparent 8px 11px);
-}
+.iw-barcode { display: block; width: 88%; height: 72px; margin: 10px auto 4px; overflow: visible; }
+.iw-barcode rect { fill: #000; }
+.iw-print-sheet { display: none; }
 .iw-print-button { width: 100%; }
 @media (max-width: 900px) {
   .iw-product { grid-template-columns: 88px 1fr; }
@@ -222,14 +219,47 @@
 }
 @media print {
   body.iw-printing * { visibility: hidden !important; }
-  body.iw-printing #scene_484 #view_1036 .iw-label-preview,
-  body.iw-printing #scene_484 #view_1036 .iw-label-preview * { visibility: visible !important; }
-  body.iw-printing #scene_484 #view_1036 .iw-label-preview {
-    position: fixed;
-    inset: 0;
-    width: 2in;
-    min-height: 1in;
+  body.iw-printing #scene_484 #view_1036 .iw-print-sheet,
+  body.iw-printing #scene_484 #view_1036 .iw-print-sheet * { visibility: visible !important; }
+  body.iw-printing #scene_484 #view_1036 .iw-print-sheet {
+    display: block;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: var(--iw-label-width, 2in);
+    margin: 0;
+  }
+  body.iw-printing #scene_484 #view_1036 .iw-print-label {
+    box-sizing: border-box;
+    width: var(--iw-label-width, 2in);
+    height: var(--iw-label-height, 1in);
+    padding: .08in;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     margin: 0;
     border: 0;
+    overflow: hidden;
+    color: #000;
+    text-align: center;
+    break-after: page;
+    page-break-after: always;
   }
+  body.iw-printing #scene_484 #view_1036 .iw-print-label:last-child { break-after: auto; page-break-after: auto; }
+  body.iw-printing #scene_484 #view_1036 .iw-print-label strong {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 9pt;
+    line-height: 1.05;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.iw-printing #scene_484 #view_1036 .iw-print-label span { font-size: 7pt; line-height: 1; }
+  body.iw-printing #scene_484 #view_1036 .iw-print-label .iw-barcode {
+    width: 92%;
+    height: .42in;
+    margin: .02in auto;
+  }
+  body.iw-printing #scene_484 #view_1036 .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
 }

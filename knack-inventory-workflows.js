@@ -623,10 +623,58 @@
     await reload();
   }
 
+  const CODE128_PATTERNS = [
+    "212222", "222122", "222221", "121223", "121322", "131222", "122213", "122312",
+    "132212", "221213", "221312", "231212", "112232", "122132", "122231", "113222",
+    "123122", "123221", "223211", "221132", "221231", "213212", "223112", "312131",
+    "311222", "321122", "321221", "312212", "322112", "322211", "212123", "212321",
+    "232121", "111323", "131123", "131321", "112313", "132113", "132311", "211313",
+    "231113", "231311", "112133", "112331", "132131", "113123", "113321", "133121",
+    "313121", "211331", "231131", "213113", "213311", "213131", "311123", "311321",
+    "331121", "312113", "312311", "332111", "314111", "221411", "431111", "111224",
+    "111422", "121124", "121421", "141122", "141221", "112214", "112412", "122114",
+    "122411", "142112", "142211", "241211", "221114", "413111", "241112", "134111",
+    "111242", "121142", "121241", "114212", "124112", "124211", "411212", "421112",
+    "421211", "212141", "214121", "412121", "111143", "111341", "131141", "114113",
+    "114311", "411113", "411311", "113141", "114131", "311141", "411131", "211412",
+    "211214", "211232", "2331112"
+  ];
+
+  function code128Svg(value) {
+    const readable = String(value || "").trim();
+    const values = [...readable].map(character => {
+      const code = character.charCodeAt(0);
+      return code >= 32 && code <= 126 ? code - 32 : 31;
+    });
+    const startCode = 104;
+    const checksum = (startCode + values.reduce((sum, code, index) => sum + code * (index + 1), 0)) % 103;
+    const encoded = [startCode, ...values, checksum, 106];
+    const moduleWidth = 2;
+    const quiet = 20;
+    const height = 62;
+    let x = quiet;
+    const bars = [];
+    for (const code of encoded) {
+      const pattern = CODE128_PATTERNS[code];
+      [...pattern].forEach((modules, index) => {
+        const width = Number(modules) * moduleWidth;
+        if (index % 2 === 0) bars.push(`<rect x="${x}" y="0" width="${width}" height="${height}"/>`);
+        x += width;
+      });
+    }
+    const width = x + quiet;
+    return `<svg class="iw-barcode" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Code 128 barcode ${html(readable)}" xmlns="http://www.w3.org/2000/svg">${bars.join("")}</svg>`;
+  }
+
+  function labelMarkup(product) {
+    const code = product.barcode || product.supplierSku || product.sku;
+    return `<strong>${html(product.name)}</strong><span>${html(product.sku || product.supplierSku)}</span>${code128Svg(code)}<b>${html(code)}</b>`;
+  }
+
   async function mountLabels(host) {
     host.innerHTML = base("Print Labels", "Inventory labeling");
     const root = host.querySelector(".iw-shell");
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-label-layout"><section class="iw-card"><h2>Find items</h2><label>Source<select data-source><option value="Price List">Price List</option><option value="Receiving Transaction">Receiving Transactions</option></select></label><label>Scan or search<div class="iw-input-row"><input data-search placeholder="Supplier SKU, OR SKU, barcode, or item name"><button data-add class="iw-primary">Add</button></div></label><div data-results class="iw-list"></div></section><section class="iw-card"><div class="iw-section-head"><h2>Print queue</h2><button data-clear>Clear</button></div><div data-queue></div><div class="iw-form-grid iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<input data-printer value="Zebra — PAL"></label></div><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-primary iw-print-button">Print labels</button></section></div><p class="iw-note">Every print and reprint is logged. The browser print dialog sends the job to the selected installed printer.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-label-layout"><section class="iw-card"><h2>Find items</h2><label>Source<select data-source><option value="Price List">Price List</option><option value="Receiving Transaction">Receiving Transactions</option></select></label><label>Scan or search<div class="iw-input-row"><input data-search placeholder="Supplier SKU, OR SKU, barcode, or item name"><button data-add class="iw-primary">Add</button></div></label><div data-results class="iw-list"></div></section><section class="iw-card"><div class="iw-section-head"><h2>Print queue</h2><button data-clear>Clear</button></div><div data-queue></div><div class="iw-form-grid iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<input data-printer value="Zebra — PAL"></label></div><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><div class="iw-print-sheet" data-print-sheet aria-hidden="true"></div><button data-print class="iw-primary iw-print-button">Print labels</button></section></div><p class="iw-note">Every print and reprint is logged. The browser print dialog sends the job to the selected installed printer.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, txRows] = await Promise.all([records(PAGE.labels.items), records(PAGE.labels.transactions)]);
@@ -634,7 +682,7 @@
       const renderQueue = () => {
         const queue = root.querySelector("[data-queue]");
         queue.innerHTML = state.queue.map((entry, index) => `<div class="iw-queue-row"><div><strong>${html(entry.product.name)}</strong><span>${html(entry.product.sku || entry.product.supplierSku)}</span></div><label>Qty<input data-qty-index="${index}" type="number" min="1" value="${entry.quantity}"></label><button data-remove="${index}" aria-label="Remove">×</button></div>`).join("") || `<p class="iw-empty">Scan an item to build the print queue.</p>`;
-        root.querySelector("[data-preview]").innerHTML = state.queue[0] ? `<strong>${html(state.queue[0].product.name)}</strong><span>${html(state.queue[0].product.sku || state.queue[0].product.supplierSku)}</span><div class="iw-bars"></div><b>${html(state.queue[0].product.barcode || state.queue[0].product.supplierSku)}</b>` : `<span>Barcode preview</span>`;
+        root.querySelector("[data-preview]").innerHTML = state.queue[0] ? labelMarkup(state.queue[0].product) : `<span>Barcode preview</span>`;
       };
       const addProduct = product => {
         if (!product) return status(root, "No live Price List item matched that search.", true);
@@ -670,6 +718,26 @@
         const size = root.querySelector("[data-size]").value;
         const printer = root.querySelector("[data-printer]").value;
         try {
+          const dimensions = {
+            "2 × 1 inch": ["2in", "1in"],
+            "3 × 2 inch": ["3in", "2in"],
+            "4 × 2 inch": ["4in", "2in"]
+          };
+          const [labelWidth, labelHeight] = dimensions[size] || dimensions["2 × 1 inch"];
+          root.style.setProperty("--iw-label-width", labelWidth);
+          root.style.setProperty("--iw-label-height", labelHeight);
+          root.querySelector("[data-print-sheet]").innerHTML = state.queue.flatMap(entry =>
+            Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
+              `<div class="iw-print-label">${labelMarkup(entry.product)}</div>`
+            )
+          ).join("");
+          let pageStyle = document.querySelector("[data-iw-page-style]");
+          if (!pageStyle) {
+            pageStyle = document.createElement("style");
+            pageStyle.dataset.iwPageStyle = "";
+            document.head.appendChild(pageStyle);
+          }
+          pageStyle.textContent = `@page { size: ${labelWidth} ${labelHeight}; margin: 0; }`;
           for (const entry of state.queue) {
             await create(PAGE.labels.addLog, {
               [FIELD.label.code]: code("PRINT"),
