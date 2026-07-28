@@ -574,7 +574,7 @@
   font-size: 29px;
   line-height: 1;
 }
-.iw-menu-card-primary,
+.iw-shell button.iw-menu-card-primary,
 .iw-shell button.iw-menu-card-primary:hover {
   border-color: var(--iw-navy);
   background: var(--iw-navy);

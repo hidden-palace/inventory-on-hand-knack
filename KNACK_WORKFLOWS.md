@@ -9,6 +9,7 @@ limited in Knack to General Manager - Admin, Inventorist, and Dev roles.
 | Transfer Requests | `scene_482` | `view_1026` | Headers `view_1027`, Lines `view_1028`, Add Header `view_1029`, Add Line `view_1030` |
 | Inventory Count | `scene_483` | `view_1031` | Headers `view_1032`, Lines `view_1033`, Add Header `view_1034`, Add Line `view_1035` |
 | Print Labels | `scene_484` | `view_1036` | Logs `view_1037`, Add Log `view_1038`, Price List `view_1039`, Transactions `view_1040` |
+| Scanner Menu & Transactions | `scene_488` | `view_1049` | Reads Price List/Transactions/Locations from `scene_481`; writes through Inventory Transaction form `scene_470` / `view_1012` |
 
 Secured update forms:
 

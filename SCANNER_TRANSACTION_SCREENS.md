@@ -208,29 +208,29 @@ Count approval behavior:
   automatically.
 - An unapproved count never changes on-hand.
 
-## Shared Knack dependencies for the next build
+## Knack implementation status
 
-Existing tables/views already mapped:
+Implemented and deployed:
 
-- Price List: product identity, SKU/barcode, unit cost
-- Inventory Locations: location identity and active locations
-- Inventory Transactions: immutable inventory ledger
-- Transfer Requests and Transfer Request Lines
-- Inventory Counts and Inventory Count Lines
+- Scanner Menu page: `scene_488`
+- Scanner interface host: `view_1049`
+- Secured Inventory Transaction write form: `scene_470` / `view_1012`
+- Live Price List, location, and transaction reads: `scene_481` /
+  `view_1023`, `view_1025`, and `view_1024`
+- Main Menu plus Receive, Transfer, Usage, Damage, and Adjustment modes
+- Barcode/item-code lookup, live on-hand display, generated transaction codes,
+  automatic unit cost/date/user mapping, and role-aware transaction choices
+- Validation for product, quantity, source/destination, available stock, order
+  number, damage reason, and adjustment reason
 
-Required implementation work:
+Remaining workflow integrations for a later phase:
 
-1. Add secured Knack Add Record views for Inventory Transactions on the future
-   scanner transaction pages.
-2. Create routes/host Rich Text views for Main Menu, Receive, Transfer, Usage,
-   Damage, and Adjustment.
-3. Apply role-based visibility and validation to menu choices and forms.
-4. Reuse the live Price List scanner lookup and transaction-derived balances.
-5. Generate transaction codes without exposing the automatic fields.
-6. Connect approved transfer requests to the Transfer form prefill.
-7. Add the manager approval path that converts approved count variance into a
-   Cycle Count Adjustment.
-8. Confirm the Order Number validation/connection decision for Usage.
+1. Launch Transfer Out from an approved transfer request with the request,
+   source, destination, item, and requested quantity prefilled.
+2. Convert an approved inventory-count variance into a Cycle Count Adjustment
+   automatically.
+3. Confirm whether Usage should continue storing the entered order number in
+   Reference Number or use a new connection field to the Order table.
 
 ## Current screens 7–10 readiness
 
