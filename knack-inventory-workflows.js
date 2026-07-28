@@ -310,21 +310,23 @@
     dialog.showModal();
     return dialog;
   }
-  function base(title, eyebrow, actions = "") {
-    return `<div class="iw-shell"><header class="iw-topbar"><div><p class="iw-eyebrow">${eyebrow}</p><h1>${title}</h1></div><div class="iw-actions">${actions}</div></header><div class="iw-status" data-status hidden></div><main data-main></main><dialog class="iw-dialog"></dialog></div>`;
+  function base(title, eyebrow, actions = "", screen = "") {
+    return `<div class="iw-shell ${screen ? `iw-screen-${screen}` : ""}"><header class="iw-topbar"><div><p class="iw-eyebrow">${eyebrow}</p><h1>${title}</h1><p class="iw-subtitle" data-subtitle></p></div>${actions ? `<div class="iw-actions">${actions}</div>` : ""}</header><div class="iw-status" data-status hidden></div><main data-main></main><dialog class="iw-dialog"></dialog></div>`;
   }
 
   async function mountLookup(host) {
-    host.innerHTML = base("Inventory Lookup", "Inventory control");
+    host.innerHTML = base("Inventory Lookup", "LOOKUP UI", "", "lookup");
     const root = host.querySelector(".iw-shell");
     root.querySelector("[data-main]").innerHTML = `
-      <section class="iw-card iw-lookup"><label>Location<select data-location><option value="">All locations</option></select></label><label>Scan or search product<div class="iw-input-row"><input data-search autocomplete="off" placeholder="Supplier SKU, OR SKU, barcode, or item name"><button data-find class="iw-primary">Find</button></div></label></section>
+      <section class="iw-field-stack"><label>Location<select data-location><option value="">All Locations</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search autocomplete="off" placeholder="Scan item code"><button data-find type="button"><span aria-hidden="true">▤</span> Scan</button></div></label></section>
       <section data-result hidden>
-        <article class="iw-card iw-product"><div class="iw-photo" data-photo></div><div><span class="iw-pill" data-item-status></span><h2 data-name></h2><p data-identity></p><p class="iw-muted" data-category></p></div><dl><div><dt>Unit</dt><dd data-unit></dd></div><div><dt>Reorder point</dt><dd data-reorder></dd></div><div><dt>Reorder qty</dt><dd data-reorder-qty></dd></div></dl></article>
-        <div class="iw-metrics"><article class="iw-card"><span>On hand</span><strong data-total>0</strong></article><article class="iw-card"><span>Inventory value</span><strong data-value>$0.00</strong></article><article class="iw-card"><span>Last movement</span><strong class="iw-small" data-last>-</strong></article></div>
-        <section class="iw-card"><div class="iw-section-head"><div><p class="iw-eyebrow">Live balances</p><h2>On hand by location</h2></div><div class="iw-actions"><button data-use>Use</button><button data-transfer class="iw-primary">Transfer</button></div></div><div class="iw-table"><table><thead><tr><th>Location</th><th>Code</th><th class="iw-num">On hand</th><th class="iw-num">Value</th></tr></thead><tbody data-balances></tbody></table></div></section>
-        <section class="iw-card"><p class="iw-eyebrow">Audit trail</p><h2>Recent movements</h2><div class="iw-table"><table><thead><tr><th>Date & time</th><th>Type</th><th>Reference</th><th>Source → destination</th><th class="iw-num">In</th><th class="iw-num">Out</th><th class="iw-num">Balance</th></tr></thead><tbody data-movements></tbody></table></div></section>
-        <p class="iw-note">Read-only lookup. Inventory changes are recorded through controlled transaction workflows.</p>
+        <article class="iw-compact-product"><strong data-name></strong><span data-identity></span></article>
+        <p class="iw-section-label">On hand by location</p>
+        <section class="iw-compact-panel"><div data-balances class="iw-balance-list"></div><div class="iw-balance-total"><span>Total on hand</span><strong data-total>0</strong></div><div class="iw-balance-value"><span>Value at cost</span><strong data-value>$0.00</strong></div></section>
+        <p class="iw-section-label">Last movement</p>
+        <section class="iw-movement-card" data-last>No movements</section>
+        <button data-transaction-menu class="iw-primary iw-full-button">New Transaction</button>
+        <p class="iw-note">Read-only — no ledger row is written from this screen.</p>
       </section>`;
     status(root, "Loading live inventory...");
     try {
@@ -334,6 +336,8 @@
       const state = { products: itemRows.map(item), transactions: txRows.map(transaction), locations: locationRows.map(mapLocation), selected: null };
       const locationSelect = root.querySelector("[data-location]");
       locationSelect.insertAdjacentHTML("beforeend", selectOptions(state.locations, "name", "name"));
+      const userName = await currentUser();
+      root.querySelector("[data-subtitle]").textContent = `${userName} · ${state.locations[0]?.name || "All Locations"}`;
       const render = product => {
         if (!product) return status(root, "No live Price List item matched that search.", true);
         state.selected = product;
@@ -343,19 +347,14 @@
         const total = locationBalances.reduce((sum, row) => sum + row.onHand, 0);
         const movements = selectedLocation ? calculated.rows.filter(tx => tx.source === selectedLocation || tx.destination === selectedLocation) : calculated.rows;
         root.querySelector("[data-name]").textContent = product.name;
-        root.querySelector("[data-identity]").textContent = `OR SKU ${product.sku || "-"} · Supplier SKU ${product.supplierSku || "-"} · Barcode ${product.barcode || "-"}`;
-        root.querySelector("[data-category]").textContent = product.category || "-";
-        root.querySelector("[data-unit]").textContent = product.unit || "-";
-        root.querySelector("[data-reorder]").textContent = number.format(product.reorder);
-        root.querySelector("[data-reorder-qty]").textContent = number.format(product.reorderQuantity);
-        root.querySelector("[data-item-status]").textContent = product.status || "Unknown";
-        root.querySelector("[data-photo]").style.backgroundImage = product.image ? `url("${product.image.replace(/["\\]/g, "\\$&")}")` : "";
-        root.querySelector("[data-photo]").textContent = product.image ? "" : "No image";
+        root.querySelector("[data-identity]").textContent = `SKU ${product.sku || product.supplierSku || "-"} · ${product.unit || "Unit"} · ${money.format(product.cost)} / unit`;
         root.querySelector("[data-total]").textContent = number.format(total);
         root.querySelector("[data-value]").textContent = money.format(total * product.cost);
-        root.querySelector("[data-last]").textContent = movements.length ? dateText(movements[movements.length - 1].date) : "No movements";
-        root.querySelector("[data-balances]").innerHTML = locationBalances.map(row => `<tr><td>${html(row.name)}</td><td>${html(row.code)}</td><td class="iw-num">${number.format(row.onHand)}</td><td class="iw-num">${money.format(row.onHand * product.cost)}</td></tr>`).join("") || `<tr><td colspan="4" class="iw-empty">No active locations.</td></tr>`;
-        root.querySelector("[data-movements]").innerHTML = movements.slice().reverse().slice(0, 20).map(tx => `<tr><td>${html(dateText(tx.date))}</td><td>${html(tx.type)}</td><td>${html(tx.reference)}</td><td>${html(tx.source || "-")} → ${html(tx.destination || "-")}</td><td class="iw-num">${tx.in ? number.format(tx.in) : ""}</td><td class="iw-num">${tx.out ? number.format(tx.out) : ""}</td><td class="iw-num">${number.format(tx.balance)}</td></tr>`).join("") || `<tr><td colspan="7" class="iw-empty">No transactions for this item.</td></tr>`;
+        const last = movements[movements.length - 1];
+        root.querySelector("[data-last]").innerHTML = last
+          ? `<strong>${html(last.reference || last.code || last.type)}</strong><span>${html(last.type)} · ${html(last.source || "-")} → ${html(last.destination || "-")}</span><small>${html(dateText(last.date))}${last.user ? ` · ${html(last.user)}` : ""}</small>`
+          : `<span>No movements</span>`;
+        root.querySelector("[data-balances]").innerHTML = locationBalances.map(row => `<div><span>${html(row.name)}</span><strong>${number.format(row.onHand)}</strong></div>`).join("") || `<p class="iw-empty">No active locations.</p>`;
         root.querySelector("[data-result]").hidden = false;
         status(root, "");
       };
@@ -363,11 +362,24 @@
       root.querySelector("[data-find]").addEventListener("click", find);
       root.querySelector("[data-search]").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); find(); } });
       locationSelect.addEventListener("change", () => state.selected && render(state.selected));
-      root.querySelector("[data-transfer]").addEventListener("click", () => {
-        if (state.selected) location.href = `/jong/ft-dev/transfer-requests?sku=${encodeURIComponent(state.selected.sku || state.selected.supplierSku)}`;
-      });
-      root.querySelector("[data-use]").addEventListener("click", () => {
-        status(root, "Use is recorded through the existing Inventory Transactions workflow; select Order Usage there to preserve the audit trail.");
+      root.querySelector("[data-transaction-menu]").addEventListener("click", () => {
+        const sku = state.selected?.sku || state.selected?.supplierSku || "";
+        const dialog = modal(root, "New Transaction", `<div class="iw-transaction-menu">
+          <button type="button" data-transaction="receive"><strong>Receive Stock</strong><span>Add inventory received at a location</span></button>
+          <button type="button" data-transaction="transfer"><strong>Transfer Out</strong><span>Move inventory between locations</span></button>
+          <button type="button" data-transaction="usage"><strong>Record Usage</strong><span>Deduct inventory used on an order</span></button>
+          <button type="button" data-transaction="damage"><strong>Report Damage</strong><span>Write off damaged inventory</span></button>
+          <button type="button" data-transaction="adjust"><strong>Adjust Inventory</strong><span>Correct the recorded quantity</span></button>
+        </div>`, `<button value="cancel">Close</button>`);
+        dialog.querySelector("[data-transaction='transfer']").addEventListener("click", () => {
+          location.href = `/jong/ft-dev/transfer-requests?sku=${encodeURIComponent(sku)}`;
+        });
+        dialog.querySelectorAll("[data-transaction]:not([data-transaction='transfer'])").forEach(button => {
+          button.addEventListener("click", () => {
+            dialog.close();
+            status(root, `${button.querySelector("strong").textContent} selected. Open its scanner form from the Inventory Transactions workflow.`);
+          });
+        });
       });
       const initial = new URLSearchParams(location.search).get("sku");
       render(findProduct(state.products, initial || "UTC-CTR-003") || state.products[0]);
@@ -377,9 +389,9 @@
   }
 
   async function mountTransfers(host) {
-    host.innerHTML = base("Transfer Requests", "Inventory movement", `<button data-new class="iw-primary">New request</button>`);
+    host.innerHTML = base("Transfer Requests", "TRANSFER REQUEST UI", "", "transfers");
     const root = host.querySelector(".iw-shell");
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-split"><aside class="iw-card"><div class="iw-section-head"><h2>Open requests</h2><button data-refresh>Refresh</button></div><div data-request-list class="iw-list"></div></aside><section class="iw-card" data-detail><div class="iw-empty">Select a transfer request.</div></section></div>`;
+    root.querySelector("[data-main]").innerHTML = `<p class="iw-section-label">Open requests</p><div data-request-list class="iw-request-list"></div><section data-detail><div class="iw-empty">Select a transfer request.</div></section><button data-new class="iw-primary iw-full-button">+ New Request</button>`;
     const state = { requests: [], lines: [], products: [], transactions: [], locations: [], selected: null };
     const reload = async preferredId => {
       status(root, "Loading live transfer requests...");
@@ -394,6 +406,8 @@
         state.transactions = txRows.map(transaction);
         state.locations = locationRows.map(mapLocation);
         state.selected = state.requests.find(row => row.id === preferredId) || state.requests[0] || null;
+        const userName = await currentUser();
+        root.querySelector("[data-subtitle]").textContent = `${userName} · ${state.locations[0]?.name || "Inventory"} · Manager`;
         renderList();
         renderDetail();
         status(root, "");
@@ -408,7 +422,9 @@
     const renderList = () => {
       root.querySelector("[data-request-list]").innerHTML = state.requests.map(row => {
         const selected = state.selected?.id === row.id ? " is-selected" : "";
-        return `<button class="iw-list-item${selected}" data-request-id="${row.id}"><strong>${html(raw(row, FIELD.request.code))}</strong><span>${html(raw(row, FIELD.request.source))} → ${html(raw(row, FIELD.request.destination))}</span><span class="iw-pill">${html(raw(row, FIELD.request.status) || "Draft")}</span></button>`;
+        const lines = requestLines(row);
+        const needed = raw(row, FIELD.request.needed);
+        return `<button class="iw-request-item${selected}" data-request-id="${row.id}"><strong>${html(raw(row, FIELD.request.code))} · ${html(raw(row, FIELD.request.source))} → ${html(raw(row, FIELD.request.destination))}</strong><span>${lines.length} ${lines.length === 1 ? "line" : "lines"}${needed ? ` · needed ${html(dateText(needed))}` : ""}</span><em class="iw-pill">${html(raw(row, FIELD.request.status) || "Draft")}</em></button>`;
       }).join("") || `<p class="iw-empty">No transfer requests yet.</p>`;
     };
     const renderDetail = () => {
@@ -416,14 +432,16 @@
       const row = state.selected;
       if (!row) { panel.innerHTML = `<div class="iw-empty">Create the first transfer request.</div>`; return; }
       const lines = requestLines(row);
-      panel.innerHTML = `<div class="iw-section-head"><div><p class="iw-eyebrow">${html(raw(row, FIELD.request.code))}</p><h2>${html(raw(row, FIELD.request.source))} → ${html(raw(row, FIELD.request.destination))}</h2></div><span class="iw-pill">${html(raw(row, FIELD.request.status) || "Draft")}</span></div>
-        <div class="iw-meta"><span><b>Needed by</b>${html(dateText(raw(row, FIELD.request.needed)))}</span><span><b>Requested by</b>${html(raw(row, FIELD.request.requestedBy))}</span><span><b>Requested</b>${html(dateText(raw(row, FIELD.request.requestedDate)))}</span></div>
-        <div class="iw-table"><table><thead><tr><th>Item</th><th>OR SKU</th><th class="iw-num">Requested</th><th class="iw-num">Available</th><th>Status</th></tr></thead><tbody>${lines.map(line => {
+      panel.innerHTML = `<p class="iw-section-label">${html(raw(row, FIELD.request.code))} — lines</p>
+        <div class="iw-request-lines">${lines.map(line => {
           const requested = numeric(raw(line, FIELD.requestLine.requested));
           const available = numeric(raw(line, FIELD.requestLine.available));
-          return `<tr><td>${html(raw(line, FIELD.requestLine.name))}</td><td>${html(raw(line, FIELD.requestLine.sku))}</td><td class="iw-num">${number.format(requested)}</td><td class="iw-num">${number.format(available)}</td><td>${available < requested ? `<span class="iw-warning">Insufficient</span>` : "Available"}</td></tr>`;
-        }).join("") || `<tr><td colspan="5" class="iw-empty">No items have been added.</td></tr>`}</tbody></table></div>
-        <div class="iw-actions iw-footer-actions"><button data-reject>Reject</button><button data-line>Add item</button><button data-approve class="iw-primary">Approve</button></div>`;
+          const codeValue = raw(line, FIELD.requestLine.sku) || raw(line, FIELD.requestLine.supplierSku) || "-";
+          return `<div class="iw-request-line"><span><strong>${html(raw(line, FIELD.requestLine.name))}</strong><small>Item code ${html(codeValue)} · avail ${number.format(available)}</small></span><b aria-label="Quantity requested">${number.format(requested)}</b></div>`;
+        }).join("") || `<p class="iw-empty">No items have been added.</p>`}</div>
+        <div class="iw-request-alert" ${lines.some(line => numeric(raw(line, FIELD.requestLine.available)) < numeric(raw(line, FIELD.requestLine.requested))) ? "" : "hidden"}>One or more requested quantities exceed available stock at the source.</div>
+        <div class="iw-actions iw-decision-actions"><button data-reject>Reject</button><button data-approve class="iw-success-button">Approve</button></div>
+        <button data-line class="iw-secondary-full">Add Item</button>`;
       panel.querySelector("[data-line]").addEventListener("click", openLine);
       panel.querySelector("[data-approve]").addEventListener("click", () => changeStatus("Approved"));
       panel.querySelector("[data-reject]").addEventListener("click", () => changeStatus("Rejected"));
@@ -479,7 +497,7 @@
       renderList();
       renderDetail();
     });
-    root.querySelector("[data-refresh]").addEventListener("click", () => reload(state.selected?.id));
+    root.querySelector("[data-refresh]")?.addEventListener("click", () => reload(state.selected?.id));
     root.querySelector("[data-new]").addEventListener("click", () => {
       const options = selectOptions(state.locations);
       const dialog = modal(root, "New transfer request", `<div class="iw-form-grid"><label>Source location<select data-source><option value="">Select</option>${options}</select></label><label>Destination location<select data-destination><option value="">Select</option>${options}</select></label><label>Needed by<input data-needed type="datetime-local"></label><label class="iw-span-2">Notes<textarea data-notes></textarea></label></div>`, `<button value="cancel">Cancel</button><button type="button" data-save class="iw-primary">Create request</button>`);
@@ -508,9 +526,9 @@
   }
 
   async function mountCounts(host) {
-    host.innerHTML = base("Inventory Count", "Cycle counting", `<button data-new class="iw-primary">Start new count</button>`);
+    host.innerHTML = base("Inventory Count", "COUNT UI", "", "counts");
     const root = host.querySelector(".iw-shell");
-    root.querySelector("[data-main]").innerHTML = `<section class="iw-card" data-session><div class="iw-empty">Start a new count or resume a draft count below.</div></section><section class="iw-card"><div class="iw-section-head"><h2>Recent count sheets</h2><button data-refresh>Refresh</button></div><div class="iw-table"><table><thead><tr><th>Count</th><th>Location</th><th>Scope</th><th>Status</th><th>Started</th><th></th></tr></thead><tbody data-counts></tbody></table></div></section>`;
+    root.querySelector("[data-main]").innerHTML = `<section data-session><div class="iw-empty">Start a new count to begin scanning.</div></section><button data-new class="iw-primary iw-full-button">Start New Count</button>`;
     const state = { counts: [], lines: [], products: [], transactions: [], locations: [], selected: null };
     const reload = async preferredId => {
       status(root, "Loading live count sheets...");
@@ -524,7 +542,11 @@
         state.products = productRows.map(item);
         state.transactions = txRows.map(transaction);
         state.locations = locationRows.map(mapLocation);
-        state.selected = state.counts.find(row => row.id === preferredId) || null;
+        state.selected = state.counts.find(row => row.id === preferredId) ||
+          state.counts.find(row => /draft|progress/i.test(String(raw(row, FIELD.count.status)))) ||
+          state.counts[0] || null;
+        const selectedLocation = state.selected ? raw(state.selected, FIELD.count.location) : state.locations[0]?.name;
+        root.querySelector("[data-subtitle]").textContent = `${raw(state.selected, FIELD.count.code) || "New count"} · ${selectedLocation || "Inventory"} · ${raw(state.selected, FIELD.count.status) || "Ready"}`;
         renderCounts();
         renderSession();
         status(root, "");
@@ -535,19 +557,25 @@
       String(raw(row, FIELD.countLine.count)) === String(raw(countRecord, FIELD.count.code))
     );
     const renderCounts = () => {
-      root.querySelector("[data-counts]").innerHTML = state.counts.slice().reverse().map(row => `<tr><td>${html(raw(row, FIELD.count.code))}</td><td>${html(raw(row, FIELD.count.location))}</td><td>${html(raw(row, FIELD.count.scope))}</td><td><span class="iw-pill">${html(raw(row, FIELD.count.status) || "Draft")}</span></td><td>${html(dateText(raw(row, FIELD.count.startedDate)))}</td><td><button data-open-count="${row.id}">Open</button></td></tr>`).join("") || `<tr><td colspan="6" class="iw-empty">No inventory counts yet.</td></tr>`;
+      const target = root.querySelector("[data-counts]");
+      if (target) target.innerHTML = state.counts.slice().reverse().map(row => `<tr><td>${html(raw(row, FIELD.count.code))}</td><td>${html(raw(row, FIELD.count.location))}</td><td>${html(raw(row, FIELD.count.scope))}</td><td><span class="iw-pill">${html(raw(row, FIELD.count.status) || "Draft")}</span></td><td>${html(dateText(raw(row, FIELD.count.startedDate)))}</td><td><button data-open-count="${row.id}">Open</button></td></tr>`).join("");
     };
     const renderSession = () => {
       const panel = root.querySelector("[data-session]");
       const countRecord = state.selected;
-      if (!countRecord) { panel.innerHTML = `<div class="iw-empty">Start a new count or resume a draft count below.</div>`; return; }
+      root.querySelector("[data-new]").hidden = Boolean(countRecord);
+      if (!countRecord) { panel.innerHTML = `<div class="iw-empty">Start a new count to begin scanning.</div>`; return; }
       const blind = String(raw(countRecord, FIELD.count.blind)).toLowerCase() !== "false";
       const lines = linesFor(countRecord);
-      panel.innerHTML = `<div class="iw-section-head"><div><p class="iw-eyebrow">${html(raw(countRecord, FIELD.count.code))}</p><h2>${html(raw(countRecord, FIELD.count.location))}</h2></div><span class="iw-pill">${html(raw(countRecord, FIELD.count.status) || "Draft")}</span></div>
-        <div class="iw-lookup"><label>Scan or search product<div class="iw-input-row"><input data-scan placeholder="Supplier SKU, OR SKU, barcode, or item name"><button data-add class="iw-primary">Add line</button></div></label></div>
-        <p class="iw-note">${blind ? "Blind count is on: system quantity is hidden while counting." : "System quantity is visible for this count."}</p>
-        <div class="iw-table"><table><thead><tr><th>Item</th><th>OR SKU</th><th class="iw-num">Counted</th>${blind ? "" : `<th class="iw-num">System</th><th class="iw-num">Variance</th>`}</tr></thead><tbody>${lines.map(line => `<tr><td>${html(raw(line, FIELD.countLine.name))}</td><td>${html(raw(line, FIELD.countLine.sku))}</td><td class="iw-num">${number.format(numeric(raw(line, FIELD.countLine.counted)))}</td>${blind ? "" : `<td class="iw-num">${number.format(numeric(raw(line, FIELD.countLine.system)))}</td><td class="iw-num">${number.format(numeric(raw(line, FIELD.countLine.variance)))}</td>`}</tr>`).join("") || `<tr><td colspan="${blind ? 3 : 5}" class="iw-empty">Scan the first item.</td></tr>`}</tbody></table></div>
-        <div class="iw-actions iw-footer-actions"><button data-next>Add Line & Scan Next</button><button data-submit class="iw-primary">Submit for Approval</button></div>`;
+      const lastLine = lines[lines.length - 1];
+      panel.innerHTML = `<div class="iw-field-stack"><label>Location<div class="iw-select-display">${html(raw(countRecord, FIELD.count.location))}</div></label><label>Scope<div class="iw-select-display">${html(raw(countRecord, FIELD.count.scope) || "All Items")}</div></label><label>Scan product<div class="iw-scan-control"><input data-scan placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div>
+        <article class="iw-compact-product"><strong>${html(lastLine ? raw(lastLine, FIELD.countLine.name) : "Scan a product to count")}</strong><span>${lastLine ? `Item code ${html(raw(lastLine, FIELD.countLine.sku) || raw(lastLine, FIELD.countLine.supplierSku) || "-")}` : "The item will load here"}</span></article>
+        <p class="iw-section-label">Counted qty</p>
+        <div class="iw-counted-control"><span>${lastLine ? number.format(numeric(raw(lastLine, FIELD.countLine.counted))) : "0"}</span><b>− &nbsp; +</b></div>
+        <p class="iw-note">${blind ? "Blind count is on — system quantity is hidden from the counter." : "System quantity is visible for this count."}</p>
+        <p class="iw-section-label">Count sheet (${lines.length} lines)</p>
+        <div class="iw-count-lines">${lines.slice(-8).map(line => `<div><span><strong>${html(raw(line, FIELD.countLine.name))}</strong><small>Item code ${html(raw(line, FIELD.countLine.sku) || raw(line, FIELD.countLine.supplierSku) || "-")}</small></span><b>${number.format(numeric(raw(line, FIELD.countLine.counted)))}</b></div>`).join("") || `<p class="iw-empty">Scan the first item.</p>`}</div>
+        <button data-next class="iw-success-button iw-full-button">Add Line & Scan Next</button><button data-submit class="iw-primary iw-full-button">Submit for Approval</button>`;
       const openLine = () => {
         const product = findProduct(state.products, panel.querySelector("[data-scan]").value);
         if (!product) return status(root, "No live Price List item matched that scan.", true);
@@ -597,7 +625,7 @@
       state.selected = state.counts.find(row => row.id === button.dataset.openCount);
       renderSession();
     });
-    root.querySelector("[data-refresh]").addEventListener("click", () => reload(state.selected?.id));
+    root.querySelector("[data-refresh]")?.addEventListener("click", () => reload(state.selected?.id));
     root.querySelector("[data-new]").addEventListener("click", () => {
       const dialog = modal(root, "Start inventory count", `<div class="iw-form-grid"><label>Location<select data-location><option value="">Select</option>${selectOptions(state.locations)}</select></label><label>Scope<select data-scope><option>All Items</option><option>Category</option><option>Selected Items</option></select></label><label class="iw-span-2">Scope details<input data-details placeholder="Optional category or item notes"></label><label class="iw-check"><input data-blind type="checkbox" checked> Blind count</label></div>`, `<button value="cancel">Cancel</button><button type="button" data-save class="iw-primary">Start count</button>`);
       dialog.querySelector("[data-save]").addEventListener("click", async () => {
@@ -672,16 +700,21 @@
   }
 
   async function mountLabels(host) {
-    host.innerHTML = base("Print Labels", "Inventory labeling");
+    host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-label-layout"><section class="iw-card"><h2>Find items</h2><label>Source<select data-source><option value="Price List">Price List</option><option value="Receiving Transaction">Receiving Transactions</option></select></label><label>Scan or search<div class="iw-input-row"><input data-search placeholder="Supplier SKU, OR SKU, barcode, or item name"><button data-add class="iw-primary">Add</button></div></label><div data-results class="iw-list"></div></section><section class="iw-card"><div class="iw-section-head"><h2>Print queue</h2><button data-clear>Clear</button></div><div data-queue></div><div class="iw-form-grid iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<input data-printer value="Zebra — PAL"></label></div><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><div class="iw-print-sheet" data-print-sheet aria-hidden="true"></div><button data-print class="iw-primary iw-print-button">Print labels</button></section></div><p class="iw-note">Every print and reprint is logged. The browser print dialog sends the job to the selected installed printer.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><div class="iw-print-sheet" data-print-sheet aria-hidden="true"></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, txRows] = await Promise.all([records(PAGE.labels.items), records(PAGE.labels.transactions)]);
       const state = { products: itemRows.map(item), transactions: txRows.map(transaction), queue: [] };
+      const userName = await currentUser();
+      root.querySelector("[data-subtitle]").textContent = `${userName} · Inventory`;
       const renderQueue = () => {
         const queue = root.querySelector("[data-queue]");
-        queue.innerHTML = state.queue.map((entry, index) => `<div class="iw-queue-row"><div><strong>${html(entry.product.name)}</strong><span>${html(entry.product.sku || entry.product.supplierSku)}</span></div><label>Qty<input data-qty-index="${index}" type="number" min="1" value="${entry.quantity}"></label><button data-remove="${index}" aria-label="Remove">×</button></div>`).join("") || `<p class="iw-empty">Scan an item to build the print queue.</p>`;
+        queue.innerHTML = state.queue.map((entry, index) => `<div class="iw-queue-row"><span><strong>${html(entry.product.name)}</strong><small>Item code ${html(entry.product.sku || entry.product.supplierSku)}</small></span><input aria-label="Quantity for ${html(entry.product.name)}" data-qty-index="${index}" type="number" min="1" value="${entry.quantity}"><button data-remove="${index}" aria-label="Remove ${html(entry.product.name)}">×</button></div>`).join("") || `<p class="iw-empty">Scan an item to build the print queue.</p>`;
+        const total = state.queue.reduce((sum, entry) => sum + Math.max(1, Math.floor(entry.quantity)), 0);
+        root.querySelector("[data-total-labels]").textContent = number.format(total);
+        root.querySelector("[data-print]").textContent = total ? `Print ${number.format(total)} ${total === 1 ? "Label" : "Labels"}` : "Print Labels";
         root.querySelector("[data-preview]").innerHTML = state.queue[0] ? labelMarkup(state.queue[0].product) : `<span>Barcode preview</span>`;
       };
       const addProduct = product => {
