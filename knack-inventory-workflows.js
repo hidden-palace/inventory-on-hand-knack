@@ -151,7 +151,13 @@
       const userToken = user?.token || user?.user_token || user?.session?.token;
       if (userToken) return userToken;
     }
-    if (knack?.getUserToken) return await knack.getUserToken();
+    if (knack?.getUserToken) {
+      const classicToken = await Promise.race([
+        knack.getUserToken(),
+        new Promise(resolve => setTimeout(() => resolve(""), 2000))
+      ]);
+      if (classicToken) return classicToken;
+    }
     if (knack?.getUser) {
       const user = await Promise.race([
         knack.getUser(),
