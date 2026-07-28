@@ -142,9 +142,21 @@
   }
   async function token() {
     const knack = globalThis.Knack;
+    if (globalThis.__inventoryUserToken) return globalThis.__inventoryUserToken;
+    if (globalThis.__inventoryUserPromise) {
+      const user = await Promise.race([
+        globalThis.__inventoryUserPromise,
+        new Promise(resolve => setTimeout(() => resolve(null), 5000))
+      ]);
+      const userToken = user?.token || user?.user_token || user?.session?.token;
+      if (userToken) return userToken;
+    }
     if (knack?.getUserToken) return await knack.getUserToken();
     if (knack?.getUser) {
-      const user = await knack.getUser();
+      const user = await Promise.race([
+        knack.getUser(),
+        new Promise(resolve => setTimeout(() => resolve(null), 5000))
+      ]);
       return user?.token || user?.user_token || user?.session?.token || "";
     }
     return "";
