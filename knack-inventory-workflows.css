@@ -425,7 +425,7 @@
   background: var(--iw-navy);
   color: #fff;
 }
-.iw-success-button,
+.iw-shell button.iw-success-button,
 .iw-shell button.iw-success-button:hover {
   border-color: var(--iw-green);
   background: var(--iw-green);
