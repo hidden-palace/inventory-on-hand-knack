@@ -624,12 +624,15 @@
 .iw-product-scan button,
 .iw-shell .iw-product-scan button:hover {
   flex: 0 0 auto;
+  width: 92px;
   min-height: 54px;
+  padding: 0 8px;
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--iw-green);
-  text-transform: uppercase;
+  color: #284631;
+  font-size: 25px;
+  letter-spacing: .08em;
 }
 .iw-scanned-product {
   padding: 10px 13px;
@@ -681,12 +684,25 @@
 .iw-dialog::backdrop { background: rgb(22 35 56 / .58); }
 
 @media (max-width: 620px) {
+  body:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488) {
+    background: #eef2f7 !important;
+  }
+  body:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488) #root {
+    min-height: 100vh;
+    background: #eef2f7 !important;
+  }
+  body:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488) .kn-header-mobile {
+    display: none !important;
+  }
+  .kn-page-container:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488) {
+    padding: 12px !important;
+  }
   #scene_481 #view_1022,
   #scene_482 #view_1026,
   #scene_483 #view_1031,
   #scene_484 #view_1036,
-  #scene_488 #view_1049 { width: calc(100% + 16px); margin-left: -8px; }
-  .iw-shell { border-radius: 12px; }
+  #scene_488 #view_1049 { width: 100%; margin-left: 0; }
+  .iw-shell { width: 100%; max-width: 100%; border-radius: 14px; }
   .iw-shell > main { padding: 14px 17px 10px; }
   .iw-topbar { padding-inline: 19px; }
   .iw-label-settings { grid-template-columns: 1fr 1fr; }

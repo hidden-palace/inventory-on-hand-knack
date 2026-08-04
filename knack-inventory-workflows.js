@@ -704,12 +704,12 @@
       const pattern = CODE128_PATTERNS[code];
       [...pattern].forEach((modules, index) => {
         const width = Number(modules) * moduleWidth;
-        if (index % 2 === 0) bars.push(`<rect x="${x}" y="0" width="${width}" height="${height}"/>`);
+        if (index % 2 === 0) bars.push(`<rect x="${x}" y="0" width="${width}" height="${height}" fill="#000"/>`);
         x += width;
       });
     }
     const width = x + quiet;
-    return `<svg class="iw-barcode" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Code 128 barcode ${html(readable)}" xmlns="http://www.w3.org/2000/svg">${bars.join("")}</svg>`;
+    return `<svg class="iw-barcode" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" shape-rendering="crispEdges" role="img" aria-label="Code 128 barcode ${html(readable)}" xmlns="http://www.w3.org/2000/svg">${bars.join("")}</svg>`;
   }
 
   function labelMarkup(product) {
@@ -717,10 +717,44 @@
     return `<strong>${html(product.name)}</strong><span>${html(product.sku || product.supplierSku)}</span>${code128Svg(code)}<b>${html(code)}</b>`;
   }
 
+  function printLabels(entries, labelWidth, labelHeight) {
+    const labels = entries.flatMap(entry =>
+      Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
+        `<section class="iw-print-label">${labelMarkup(entry.product)}</section>`
+      )
+    ).join("");
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    document.body.appendChild(frame);
+    const printDocument = frame.contentDocument;
+    printDocument.open();
+    printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>
+      @page { size: ${labelWidth} ${labelHeight}; margin: 0; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; }
+      .iw-print-label { width: ${labelWidth}; height: ${labelHeight}; padding: .08in; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-after: page; page-break-after: always; }
+      .iw-print-label:last-child { break-after: auto; page-break-after: auto; }
+      .iw-print-label strong { display: block; max-width: 100%; overflow: hidden; font-size: 9pt; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
+      .iw-print-label span { font-size: 7pt; line-height: 1; }
+      .iw-print-label .iw-barcode { display: block; width: 92%; height: .42in; margin: .02in auto; overflow: visible; }
+      .iw-print-label .iw-barcode rect { fill: #000 !important; }
+      .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
+    </style></head><body>${labels}</body></html>`);
+    printDocument.close();
+    const cleanup = () => setTimeout(() => frame.remove(), 1000);
+    frame.contentWindow.addEventListener("afterprint", cleanup, { once: true });
+    setTimeout(() => {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      setTimeout(cleanup, 30000);
+    }, 250);
+  }
+
   async function mountLabels(host) {
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><div class="iw-print-sheet" data-print-sheet aria-hidden="true"></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, txRows, locationRows] = await Promise.all([
@@ -784,20 +818,6 @@
             "4 × 2 inch": ["4in", "2in"]
           };
           const [labelWidth, labelHeight] = dimensions[size] || dimensions["2 × 1 inch"];
-          root.style.setProperty("--iw-label-width", labelWidth);
-          root.style.setProperty("--iw-label-height", labelHeight);
-          root.querySelector("[data-print-sheet]").innerHTML = state.queue.flatMap(entry =>
-            Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
-              `<div class="iw-print-label">${labelMarkup(entry.product)}</div>`
-            )
-          ).join("");
-          let pageStyle = document.querySelector("[data-iw-page-style]");
-          if (!pageStyle) {
-            pageStyle = document.createElement("style");
-            pageStyle.dataset.iwPageStyle = "";
-            document.head.appendChild(pageStyle);
-          }
-          pageStyle.textContent = `@page { size: ${labelWidth} ${labelHeight}; margin: 0; }`;
           for (const entry of state.queue) {
             await create(PAGE.labels.addLog, {
               [FIELD.label.code]: code("PRINT"),
@@ -814,9 +834,7 @@
               [FIELD.label.reprint]: entry.reprint
             });
           }
-          document.body.classList.add("iw-printing");
-          window.print();
-          setTimeout(() => document.body.classList.remove("iw-printing"), 0);
+          printLabels(state.queue, labelWidth, labelHeight);
           state.queue.forEach(entry => { entry.reprint = true; });
           status(root, "Print job opened and logged successfully.");
         } catch (error) { status(root, error.message, true); }
@@ -834,30 +852,32 @@
         eyebrow: "RECEIVE TRANSACTION", title: "Receive Stock", subtitle: "Warehouse Staff",
         type: "Receiving Transaction", prefix: "RCV", locationLabel: "Location (receive into)",
         quantityLabel: "Quantity received", extraLabel: "Reference # (PO)", extraPlaceholder: "Optional — PO / invoice",
-        saveLabel: "✓ Save Receive", direction: "in"
+        saveLabel: "✓ Save Receive", direction: "in", displayType: "Receive", autoLocation: "Source = none"
       },
       transfer: {
         eyebrow: "TRANSFER TRANSACTION", title: "Transfer Out", subtitle: "Warehouse Staff",
         type: "Inventory Transfer", prefix: "TRF", quantityLabel: "Quantity to transfer",
-        saveLabel: "✓ Save Transfer", direction: "transfer"
+        saveLabel: "✓ Save Transfer", direction: "transfer", displayType: "Transfer", autoLocation: "Ref = request #"
       },
       usage: {
         eyebrow: "DEDUCT TRANSACTION", title: "Record Usage", subtitle: "Florist · Flower Shop",
         type: "Order Usage", prefix: "USE", locationLabel: "Location (used from)",
         quantityLabel: "Quantity used", extraLabel: "Order number", extraPlaceholder: "e.g. SO-10482",
-        saveLabel: "✓ Save Usage", direction: "out", extraRequired: true
+        saveLabel: "✓ Save Usage", direction: "out", extraRequired: true, displayType: "Deduct", autoLocation: "Dest = none"
       },
       damage: {
         eyebrow: "DAMAGE TRANSACTION", title: "Report Damage", subtitle: "Warehouse / Store Staff",
         type: "Damage", prefix: "DMG", locationLabel: "Location (written off from)",
-        quantityLabel: "Quantity damaged", extraLabel: "Reason", extraPlaceholder: "Why was it damaged?",
-        saveLabel: "✓ Save Damage", direction: "out", extraRequired: true, extraToNotes: true
+        quantityLabel: "Quantity damaged", extraLabel: "Damaged reason", extraPlaceholder: "Why was it damaged?",
+        saveLabel: "✓ Save Damage", direction: "out", extraRequired: true, extraToNotes: true,
+        displayType: "Damage", autoLocation: "Dest = none"
       },
       adjust: {
         eyebrow: "ADJUSTMENT TRANSACTION", title: "Adjust Inventory", subtitle: "Manager only",
         type: "Cycle Count Adjustment", prefix: "ADJ", locationLabel: "Location (correcting)",
         quantityLabel: "Adjustment (+/−)", extraLabel: "Reason", extraPlaceholder: "Reason for correction",
-        saveLabel: "✓ Save Adjustment", direction: "adjust", extraRequired: true, extraToNotes: true
+        saveLabel: "✓ Save Adjustment", direction: "adjust", extraRequired: true, extraToNotes: true,
+        displayType: "Adjustment", autoLocation: "Dest = none"
       }
     };
     const config = transactionScreens[screen];
@@ -934,20 +954,17 @@
         ? `<label>${config.extraLabel}${config.extraRequired ? `<em>Required</em>` : `<em class="iw-optional">Optional</em>`}<input data-extra placeholder="${html(config.extraPlaceholder)}"></label>`
         : "";
       const locationFields = config.direction === "transfer"
-        ? `<label>Source location<em>Required</em><select data-source><option value="">Select location</option>${locationOptions}</select></label><label>Destination location<em>Required</em><select data-destination><option value="">Select location</option>${locationOptions}</select></label>`
+        ? `<label>Source location<em>Required</em><select data-source><option value="">Select location</option>${locationOptions}</select></label><label>Destination location<em>Required</em><select data-destination><option value="">Select store</option>${locationOptions}</select></label>`
         : `<label>${config.locationLabel}<em>Required</em><select data-location><option value="">Select location</option>${locationOptions}</select></label>`;
-      root.querySelector("[data-main]").innerHTML = `<button data-back-menu class="iw-back-button">‹ Main Menu</button><div class="iw-transaction-form">
+      root.querySelector("[data-main]").innerHTML = `<div class="iw-transaction-form">
         ${locationFields}
-        <label>Product<em>Required</em><div class="iw-product-scan"><input data-product-search autocomplete="off" placeholder="Scan product barcode"><button data-product-find type="button"><span aria-hidden="true">▥</span> Scan</button></div></label>
+        <label>Product<em>Required</em><div class="iw-product-scan"><button data-product-find class="iw-product-scan-icon" type="button" aria-label="Scan product"><span aria-hidden="true">▮║▮</span></button><input data-product-search autocomplete="off" placeholder="Scan product barcode"></div></label>
         <article class="iw-scanned-product"><strong data-product-name>— product loads on scan —</strong><span>SKU: <b data-product-code>—</b></span><span>On hand: <b data-product-on-hand>—</b></span></article>
         <label>${config.quantityLabel}<em>Required</em><input data-quantity class="iw-large-quantity" type="number" step="${config.direction === "adjust" ? "1" : "1"}" ${config.direction === "adjust" ? "" : "min=\"1\""} value="0"></label>
         ${extraField}
         <button data-save-transaction class="iw-success-button iw-full-button">${config.saveLabel}</button>
-        <div class="iw-auto-fields"><strong>Set automatically — not on screen</strong><span>Type = ${html(config.type)}</span><span>Unit Cost = product cost</span><span>Date = now</span><span>Employee = me</span><span>No. = ${config.prefix}-####</span></div>
+        <div class="iw-auto-fields"><strong>Set automatically — not on screen</strong><span>Type = ${html(config.displayType || config.type)}</span><span>${html(config.autoLocation)}</span><span>Unit Cost = product cost</span><span>Date = now</span><span>Employee = me</span><span>No. = ${config.prefix}-####</span></div>
       </div>`;
-      root.querySelector("[data-back-menu]").addEventListener("click", () => {
-        location.href = "/jong/ft-dev/scanner-menu";
-      });
       const sourceControl = root.querySelector("[data-source]") || root.querySelector("[data-location]");
       const destinationControl = root.querySelector("[data-destination]");
       const prefillLocation = params.get("location");
