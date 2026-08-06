@@ -185,17 +185,25 @@
   }
   async function currentUserRecord() {
     try {
-      const cached = globalThis.__inventoryUser || null;
-      const fresh = await Promise.race([
-        globalThis.Knack?.getUser?.(),
-        new Promise(resolve => setTimeout(() => resolve(null), 3000))
-      ]);
-      if (!fresh) return cached;
-      const merged = { ...(cached || {}), ...fresh };
-      for (const key of ["roles", "role_names", "profile_keys", "profile_keys_raw", "values"]) {
-        if (fresh?.[key] == null && cached?.[key] != null) merged[key] = cached[key];
+      let merged = globalThis.__inventoryUser || null;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const fresh = await Promise.race([
+          globalThis.Knack?.getUser?.(),
+          new Promise(resolve => setTimeout(() => resolve(null), 2500))
+        ]);
+        if (fresh) {
+          const previous = merged;
+          merged = { ...(previous || {}), ...fresh };
+          for (const key of ["roles", "role_names", "profile_keys", "profile_keys_raw", "values"]) {
+            const freshValue = fresh?.[key];
+            const missing = freshValue == null || (Array.isArray(freshValue) && freshValue.length === 0);
+            if (missing && previous?.[key] != null) merged[key] = previous[key];
+          }
+          globalThis.__inventoryUser = merged;
+          if (roleNames(merged).length) return merged;
+        }
+        if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 450));
       }
-      globalThis.__inventoryUser = merged;
       return merged;
     } catch {
       return globalThis.__inventoryUser || null;
