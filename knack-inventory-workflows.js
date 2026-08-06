@@ -752,19 +752,24 @@
     const renderSession = () => {
       const panel = root.querySelector("[data-session]");
       const countRecord = state.selected;
-      root.querySelector("[data-new]").hidden = Boolean(countRecord);
+      const countStatus = String(raw(countRecord, FIELD.count.status) || "");
+      const editable = /draft|progress|started/i.test(countStatus);
+      root.querySelector("[data-new]").hidden = Boolean(countRecord && editable);
       if (!countRecord) { panel.innerHTML = `<div class="iw-empty">Start a new count to begin scanning.</div>`; return; }
       const blind = String(raw(countRecord, FIELD.count.blind)).toLowerCase() !== "false";
       const lines = linesFor(countRecord);
       const lastLine = lines[lines.length - 1];
-      panel.innerHTML = `<div class="iw-field-stack"><label>Location<div class="iw-select-display">${html(raw(countRecord, FIELD.count.location))}</div></label><label>Scope<div class="iw-select-display">${html(raw(countRecord, FIELD.count.scope) || "All Items")}</div></label><label>Scan product<div class="iw-scan-control"><input data-scan placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div>
-        <article class="iw-compact-product"><strong>${html(lastLine ? raw(lastLine, FIELD.countLine.name) : "Scan a product to count")}</strong><span>${lastLine ? `Item code ${html(raw(lastLine, FIELD.countLine.sku) || raw(lastLine, FIELD.countLine.supplierSku) || "-")}` : "The item will load here"}</span></article>
-        <p class="iw-section-label">Counted qty</p>
-        <div class="iw-counted-control"><span>${lastLine ? number.format(numeric(raw(lastLine, FIELD.countLine.counted))) : "0"}</span><b>− &nbsp; +</b></div>
+      const scanControls = editable ? `<label>Scan product<div class="iw-scan-control"><input data-scan placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label>` : "";
+      const latestCount = editable ? `<article class="iw-compact-product"><strong>${html(lastLine ? raw(lastLine, FIELD.countLine.name) : "Scan a product to count")}</strong><span>${lastLine ? `Item code ${html(raw(lastLine, FIELD.countLine.sku) || raw(lastLine, FIELD.countLine.supplierSku) || "-")}` : "The item will load here"}</span></article>
+        <p class="iw-section-label">Counted qty</p><div class="iw-counted-control"><span>${lastLine ? number.format(numeric(raw(lastLine, FIELD.countLine.counted))) : "0"}</span><b>− &nbsp; +</b></div>` : `<p class="iw-workflow-message">This ${html(countStatus.toLowerCase() || "closed")} count is read-only. Start a new count to record additional quantities.</p>`;
+      const editActions = editable ? `<button data-next class="iw-success-button iw-full-button">Add Line & Scan Next</button><button data-submit class="iw-primary iw-full-button">Submit for Approval</button>` : "";
+      panel.innerHTML = `<div class="iw-field-stack"><label>Location<div class="iw-select-display">${html(raw(countRecord, FIELD.count.location))}</div></label><label>Scope<div class="iw-select-display">${html(raw(countRecord, FIELD.count.scope) || "All Items")}</div></label>${scanControls}</div>
+        ${latestCount}
         <p class="iw-note">${blind ? "Blind count is on — system quantity is hidden from the counter." : "System quantity is visible for this count."}</p>
         <p class="iw-section-label">Count sheet (${lines.length} lines)</p>
         <div class="iw-count-lines">${lines.slice(-8).map(line => `<div><span><strong>${html(raw(line, FIELD.countLine.name))}</strong><small>Item code ${html(raw(line, FIELD.countLine.sku) || raw(line, FIELD.countLine.supplierSku) || "-")}</small></span><b>${number.format(numeric(raw(line, FIELD.countLine.counted)))}</b></div>`).join("") || `<p class="iw-empty">Scan the first item.</p>`}</div>
-        <button data-next class="iw-success-button iw-full-button">Add Line & Scan Next</button><button data-submit class="iw-primary iw-full-button">Submit for Approval</button>`;
+        ${editActions}`;
+      if (!editable) return;
       const openLine = () => {
         const product = findProduct(state.products, panel.querySelector("[data-scan]").value);
         if (!product) return status(root, "No live Price List item matched that scan.", true);
