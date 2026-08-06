@@ -200,6 +200,18 @@
       .filter(Boolean)
       .map(String);
   }
+  function accessFor(user) {
+    const roles = roleNames(user);
+    const matchesRole = pattern => roles.some(role => pattern.test(role));
+    const isDev = matchesRole(/\bdev\b/i);
+    const isManager = matchesRole(/general manager|branch manager|\bmanager\b|admin/i);
+    const isInventorist = matchesRole(/inventorist|inventory/i);
+    return {
+      roles,
+      canApproveTransfers: isManager || isDev,
+      canFulfillTransfers: isManager || isInventorist || isDev
+    };
+  }
   async function request(view, options = {}) {
     if (!view?.scene || !view?.view) throw new Error("This Knack view has not been configured.");
     const userToken = await token();
@@ -333,12 +345,26 @@
     return dialog;
   }
   function base(title, eyebrow, actions = "", screen = "") {
-    return `<div class="iw-shell ${screen ? `iw-screen-${screen}` : ""}"><header class="iw-topbar"><div><p class="iw-eyebrow">${eyebrow}</p><h1>${title}</h1><p class="iw-subtitle" data-subtitle></p></div>${actions ? `<div class="iw-actions">${actions}</div>` : ""}</header><div class="iw-status" data-status hidden></div><main data-main></main><dialog class="iw-dialog"></dialog></div>`;
+    const refresh = `<button type="button" class="iw-refresh-button" data-refresh-page aria-label="Refresh live data" title="Refresh live data"><span aria-hidden="true">↻</span></button>`;
+    return `<div class="iw-shell ${screen ? `iw-screen-${screen}` : ""}"><header class="iw-topbar"><div><p class="iw-eyebrow">${eyebrow}</p><h1>${title}</h1><p class="iw-subtitle" data-subtitle></p></div><div class="iw-topbar-actions">${actions}${refresh}</div></header><div class="iw-status" data-status hidden></div><main data-main></main><dialog class="iw-dialog"></dialog></div>`;
+  }
+  function wireRefresh(root, refresh) {
+    const button = root.querySelector("[data-refresh-page]");
+    button?.addEventListener("click", async () => {
+      button.disabled = true;
+      button.classList.add("is-refreshing");
+      try { await refresh(); }
+      finally {
+        button.disabled = false;
+        button.classList.remove("is-refreshing");
+      }
+    });
   }
 
   async function mountLookup(host) {
     host.innerHTML = base("Inventory Lookup", "LOOKUP UI", "", "lookup");
     const root = host.querySelector(".iw-shell");
+    wireRefresh(root, () => mountLookup(host));
     root.querySelector("[data-main]").innerHTML = `
       <section class="iw-field-stack"><label>Location<select data-location><option value="">All Locations</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search autocomplete="off" placeholder="Scan item code"><button data-find type="button"><span aria-hidden="true">▤</span> Scan</button></div></label></section>
       <section data-result hidden>
@@ -409,23 +435,30 @@
   async function mountTransfers(host) {
     host.innerHTML = base("Transfer Requests", "TRANSFER REQUEST UI", "", "transfers");
     const root = host.querySelector(".iw-shell");
+    wireRefresh(root, () => reload(state.selected?.id));
     root.querySelector("[data-main]").innerHTML = `<p class="iw-section-label">Open requests</p><div data-request-list class="iw-request-list"></div><section data-detail><div class="iw-empty">Select a transfer request.</div></section><button data-new class="iw-primary iw-full-button">+ New Request</button>`;
-    const state = { requests: [], lines: [], products: [], transactions: [], locations: [], selected: null };
+    const state = {
+      requests: [], lines: [], products: [], transactions: [], locations: [], selected: null,
+      user: null, access: { roles: [], canApproveTransfers: false, canFulfillTransfers: false }
+    };
     const reload = async preferredId => {
       status(root, "Loading live transfer requests...");
       try {
-        const [requestsRows, lineRows, productRows, txRows, locationRows] = await Promise.all([
+        const [requestsRows, lineRows, productRows, txRows, locationRows, userRecord] = await Promise.all([
           records(PAGE.transfers.requests), records(PAGE.transfers.lines), records(PAGE.lookup.items),
-          records(PAGE.lookup.transactions), records(PAGE.lookup.locations)
+          records(PAGE.lookup.transactions), records(PAGE.lookup.locations), currentUserRecord()
         ]);
         state.requests = requestsRows;
         state.lines = lineRows;
         state.products = productRows.map(item);
         state.transactions = txRows.map(transaction);
         state.locations = locationRows.map(mapLocation);
+        state.user = userRecord;
+        state.access = accessFor(userRecord);
         state.selected = state.requests.find(row => row.id === preferredId) || state.requests[0] || null;
         const userName = await currentUser();
-        root.querySelector("[data-subtitle]").textContent = `${userName} · ${state.locations[0]?.name || "Inventory"} · Manager`;
+        const roleLabel = state.access.canApproveTransfers ? "Approver" : state.access.canFulfillTransfers ? "Warehouse" : "Requester";
+        root.querySelector("[data-subtitle]").textContent = `${userName} · ${state.locations[0]?.name || "Inventory"} · ${roleLabel}`;
         renderList();
         renderDetail();
         status(root, "");
@@ -450,6 +483,28 @@
       const row = state.selected;
       if (!row) { panel.innerHTML = `<div class="iw-empty">Create the first transfer request.</div>`; return; }
       const lines = requestLines(row);
+      const requestStatus = String(raw(row, FIELD.request.status) || "Submitted");
+      const isSubmitted = requestStatus.toLowerCase() === "submitted";
+      const isApproved = requestStatus.toLowerCase() === "approved";
+      const shortage = lines.some(line => numeric(raw(line, FIELD.requestLine.available)) < numeric(raw(line, FIELD.requestLine.requested)));
+      const decisionActions = isSubmitted && state.access.canApproveTransfers
+        ? `<div class="iw-actions iw-decision-actions"><button data-reject>Decline</button><button data-approve class="iw-success-button">Approve</button></div>`
+        : "";
+      const fulfillAction = isApproved && state.access.canFulfillTransfers
+        ? `<button data-fulfill class="iw-success-button iw-full-button">Process Approved Transfer</button>`
+        : "";
+      const addLineAction = isSubmitted
+        ? `<button data-line class="iw-secondary-full">Add Item</button>`
+        : "";
+      const workflowMessage = requestStatus === "Fulfilled"
+        ? "This request has been processed and posted to the inventory ledger."
+        : requestStatus === "Rejected"
+          ? `Declined${raw(row, FIELD.request.rejection) ? ` — ${html(raw(row, FIELD.request.rejection))}` : "."}`
+          : isApproved
+            ? "Approved and ready for warehouse processing."
+            : !state.access.canApproveTransfers
+              ? "Awaiting approval by a manager."
+              : "Review the items and current source availability before approving.";
       panel.innerHTML = `<p class="iw-section-label">${html(raw(row, FIELD.request.code))} — lines</p>
         <div class="iw-request-lines">${lines.map(line => {
           const requested = numeric(raw(line, FIELD.requestLine.requested));
@@ -457,30 +512,121 @@
           const codeValue = raw(line, FIELD.requestLine.sku) || raw(line, FIELD.requestLine.supplierSku) || "-";
           return `<div class="iw-request-line"><span><strong>${html(raw(line, FIELD.requestLine.name))}</strong><small>Item code ${html(codeValue)} · avail ${number.format(available)}</small></span><b aria-label="Quantity requested">${number.format(requested)}</b></div>`;
         }).join("") || `<p class="iw-empty">No items have been added.</p>`}</div>
-        <div class="iw-request-alert" ${lines.some(line => numeric(raw(line, FIELD.requestLine.available)) < numeric(raw(line, FIELD.requestLine.requested))) ? "" : "hidden"}>One or more requested quantities exceed available stock at the source.</div>
-        <div class="iw-actions iw-decision-actions"><button data-reject>Reject</button><button data-approve class="iw-success-button">Approve</button></div>
-        <button data-line class="iw-secondary-full">Add Item</button>`;
-      panel.querySelector("[data-line]").addEventListener("click", openLine);
-      panel.querySelector("[data-approve]").addEventListener("click", () => changeStatus("Approved"));
-      panel.querySelector("[data-reject]").addEventListener("click", () => changeStatus("Rejected"));
+        <div class="iw-request-alert" ${shortage ? "" : "hidden"}>One or more requested quantities exceed the saved source-availability snapshot. Live stock is checked again before approval and processing.</div>
+        <p class="iw-workflow-message">${workflowMessage}</p>
+        ${decisionActions}${fulfillAction}${addLineAction}`;
+      panel.querySelector("[data-line]")?.addEventListener("click", openLine);
+      panel.querySelector("[data-approve]")?.addEventListener("click", () => changeStatus("Approved"));
+      panel.querySelector("[data-reject]")?.addEventListener("click", () => changeStatus("Rejected"));
+      panel.querySelector("[data-fulfill]")?.addEventListener("click", fulfillRequest);
+    };
+    const liveAvailability = lines => {
+      const sourceName = raw(state.selected, FIELD.request.source);
+      const requestedByProduct = new Map();
+      for (const line of lines) {
+        const product = findProduct(state.products, raw(line, FIELD.requestLine.sku) || raw(line, FIELD.requestLine.supplierSku));
+        if (!product) throw new Error(`The item on line ${raw(line, FIELD.requestLine.code) || line.id} is no longer available in the Price List.`);
+        const key = product.sku || product.supplierSku || product.id;
+        const entry = requestedByProduct.get(key) || { product, requested: 0 };
+        entry.requested += numeric(raw(line, FIELD.requestLine.requested));
+        requestedByProduct.set(key, entry);
+      }
+      for (const entry of requestedByProduct.values()) {
+        const available = balancesFor(entry.product, state.transactions, state.locations).locations
+          .find(locationRow => locationRow.name === sourceName)?.onHand || 0;
+        if (entry.requested > available) {
+          throw new Error(`${entry.product.name} requests ${number.format(entry.requested)}, but only ${number.format(available)} is currently available at ${sourceName}.`);
+        }
+      }
     };
     const changeStatus = async nextStatus => {
       if (!PAGE.transfers.editRequest) return status(root, "Approval controls are awaiting the secured edit view configuration.", true);
       try {
+        const currentStatus = String(raw(state.selected, FIELD.request.status) || "Submitted");
+        if (currentStatus !== "Submitted") throw new Error(`Only submitted requests can be ${nextStatus === "Approved" ? "approved" : "declined"}.`);
+        if (!state.access.canApproveTransfers) throw new Error("Only a Manager or Administrator can approve or decline transfer requests.");
+        const lines = requestLines(state.selected);
+        if (nextStatus === "Approved") {
+          if (!lines.length) throw new Error("Add at least one item before approving this request.");
+          liveAvailability(lines);
+        }
         const user = await currentUser();
         const body = { [FIELD.request.status]: nextStatus };
         if (nextStatus === "Approved") {
           body[FIELD.request.approvedBy] = user;
           body[FIELD.request.approvalDate] = knackDate();
         } else {
-          const reason = prompt("Reason for rejection:");
+          const reason = prompt("Reason for declining this request:");
           if (reason === null) return;
-          body[FIELD.request.rejection] = reason;
+          if (!reason.trim()) throw new Error("A decline reason is required.");
+          body[FIELD.request.rejection] = reason.trim();
         }
         await update(PAGE.transfers.editRequest, state.selected.id, body);
         await reload(state.selected.id);
       } catch (error) { status(root, error.message, true); }
     };
+    async function fulfillRequest() {
+      const button = root.querySelector("[data-fulfill]");
+      try {
+        if (!state.access.canFulfillTransfers) throw new Error("Only authorized warehouse or manager users can process approved transfers.");
+        if (String(raw(state.selected, FIELD.request.status)) !== "Approved") throw new Error("This request must be approved before it can be processed.");
+        const lines = requestLines(state.selected);
+        if (!lines.length) throw new Error("This approved request has no items to process.");
+        liveAvailability(lines);
+        const requestCode = String(raw(state.selected, FIELD.request.code) || "");
+        const sourceId = connectionId(state.selected, FIELD.request.source);
+        const destinationId = connectionId(state.selected, FIELD.request.destination);
+        if (!sourceId || !destinationId || sourceId === destinationId) throw new Error("This request does not have two valid transfer locations.");
+        button.disabled = true;
+        status(root, "Processing approved transfer...");
+        const userName = await currentUser();
+        const groupedLines = new Map();
+        for (const line of lines) {
+          const lineSku = String(raw(line, FIELD.requestLine.sku) || raw(line, FIELD.requestLine.supplierSku) || "").trim();
+          const product = findProduct(state.products, lineSku);
+          const key = product.sku || product.supplierSku || product.id;
+          const group = groupedLines.get(key) || { product, quantity: 0 };
+          group.quantity += numeric(raw(line, FIELD.requestLine.requested));
+          groupedLines.set(key, group);
+        }
+        for (const { product, quantity } of groupedLines.values()) {
+          const alreadyPosted = state.transactions.some(tx =>
+            String(tx.reference || "") === requestCode &&
+            String(tx.type || "").toLowerCase().includes("transfer") &&
+            matches(tx, product)
+          );
+          if (alreadyPosted) continue;
+          const transactionCode = code("TRF");
+          const body = {
+            [FIELD.transaction.code]: transactionCode,
+            [FIELD.transaction.number]: Number(String(Date.now()).slice(-9)),
+            [FIELD.transaction.itemCode]: product.barcode || product.supplierSku || product.sku,
+            [FIELD.transaction.source]: sourceId,
+            [FIELD.transaction.destination]: destinationId,
+            [FIELD.transaction.type]: "Inventory Transfer",
+            [FIELD.transaction.quantity]: quantity,
+            [FIELD.transaction.cost]: product.cost,
+            [FIELD.transaction.date]: knackDate(),
+            [FIELD.transaction.reference]: requestCode,
+            [FIELD.transaction.sku]: product.sku,
+            [FIELD.transaction.notes]: `Approved transfer request ${requestCode}; processed by ${userName}`
+          };
+          if (state.user?.id) body[FIELD.transaction.user] = state.user.id;
+          await create(PAGE.scanner.addTransaction, body);
+          state.transactions.push(transaction({ id: transactionCode, ...body }));
+        }
+        await update(PAGE.transfers.editRequest, state.selected.id, {
+          [FIELD.request.status]: "Fulfilled",
+          [FIELD.request.fulfilledDate]: knackDate()
+        });
+        await reload(state.selected.id);
+        status(root, `${requestCode} was processed and posted to the inventory ledger.`);
+      } catch (error) {
+        status(root, error.message || "Unable to process this transfer request.", true);
+      } finally {
+        if (button?.isConnected) button.disabled = false;
+      }
+    }
     const openLine = () => {
       const prefill = new URLSearchParams(location.search).get("sku") || "";
       const options = state.products.map(product => `<option value="${html(product.sku || product.supplierSku)}">${html(product.name)} — ${html(product.sku || product.supplierSku)}</option>`).join("");
@@ -546,6 +692,7 @@
   async function mountCounts(host) {
     host.innerHTML = base("Inventory Count", "COUNT UI", "", "counts");
     const root = host.querySelector(".iw-shell");
+    wireRefresh(root, () => mountCounts(host));
     root.querySelector("[data-main]").innerHTML = `<section data-session><div class="iw-empty">Start a new count to begin scanning.</div></section><button data-new class="iw-primary iw-full-button">Start New Count</button>`;
     const state = { counts: [], lines: [], products: [], transactions: [], locations: [], selected: null };
     const reload = async preferredId => {
@@ -754,6 +901,7 @@
   async function mountLabels(host) {
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
+    wireRefresh(root, () => mountLabels(host));
     root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
@@ -885,6 +1033,7 @@
       ? base(config.title, config.eyebrow, "", "scanner")
       : base("Main Menu", "MENU UI", "", "scanner-menu");
     const root = host.querySelector(".iw-shell");
+    wireRefresh(root, () => mountScanner(host));
     status(root, "Loading scanner...");
     try {
       const userRecord = await currentUserRecord();
