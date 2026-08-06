@@ -902,22 +902,30 @@
     return `<div class="iw-label-heading"><strong>${html(product.name)}</strong><em>${html(price)}</em></div><span class="iw-label-sku">${html(product.sku || product.supplierSku)}</span>${code128Svg(code)}<b>${html(code)}</b>`;
   }
 
-  function printLabels(entries, labelWidth, labelHeight) {
+  function openPrintPreview() {
+    const preview = window.open("", "_blank");
+    if (!preview) return null;
+    try { preview.opener = null; } catch { }
+    preview.document.open();
+    preview.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Preparing Labels</title><style>body{margin:0;padding:32px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#f8fafc}main{max-width:520px;margin:12vh auto;padding:28px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.08)}h1{font-size:20px}p{color:#64748b}</style></head><body><main><h1>Preparing barcode labels…</h1><p>The print preview will be ready in a moment.</p></main></body></html>`);
+    preview.document.close();
+    return preview;
+  }
+
+  function printLabels(entries, labelWidth, labelHeight, preview) {
     const labels = entries.flatMap(entry =>
       Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
         `<section class="iw-print-label">${labelMarkup(entry.product)}</section>`
       )
     ).join("");
-    const frame = document.createElement("iframe");
-    frame.setAttribute("aria-hidden", "true");
-    frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
-    document.body.appendChild(frame);
-    const printDocument = frame.contentDocument;
+    const printDocument = preview.document;
     printDocument.open();
     printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>
       @page { size: ${labelWidth} ${labelHeight}; margin: 0; }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; }
+      .iw-print-toolbar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #e5e7eb; background: #fff; color: #475569; font-size: 13px; }
+      .iw-print-toolbar button { min-height: 42px; padding: 0 18px; border: 0; border-radius: 8px; background: #982a86; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
       .iw-print-label { width: ${labelWidth}; height: ${labelHeight}; padding: .08in; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-after: page; page-break-after: always; }
       .iw-print-label:last-child { break-after: auto; page-break-after: auto; }
       .iw-label-heading { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: .05in; }
@@ -927,15 +935,14 @@
       .iw-print-label .iw-barcode { display: block; width: 92%; height: .42in; margin: .02in auto; overflow: visible; }
       .iw-print-label .iw-barcode rect { fill: #000 !important; }
       .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
-    </style></head><body>${labels}</body></html>`);
+      @media screen { body { background: #f1f5f9; } .iw-print-label { margin: 18px auto; background: #fff; box-shadow: 0 3px 12px rgba(15,23,42,.14); } }
+      @media print { .iw-print-toolbar { display: none !important; } .iw-print-label { margin: 0; box-shadow: none; } }
+    </style></head><body><div class="iw-print-toolbar"><button type="button" onclick="window.print()">Print / Save as PDF</button><span>In the Windows print dialog, choose “Save as PDF” to download a PDF.</span></div>${labels}</body></html>`);
     printDocument.close();
-    const cleanup = () => setTimeout(() => frame.remove(), 1000);
-    frame.contentWindow.addEventListener("afterprint", cleanup, { once: true });
+    preview.focus();
     setTimeout(() => {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-      setTimeout(cleanup, 30000);
-    }, 250);
+      try { preview.print(); } catch { }
+    }, 350);
   }
 
   async function mountLabels(host) {
@@ -1002,16 +1009,18 @@
       });
       root.querySelector("[data-print]").addEventListener("click", async () => {
         if (!state.queue.length) return status(root, "Add at least one item to the print queue.", true);
-        const user = await currentUser();
         const size = root.querySelector("[data-size]").value;
         const printer = root.querySelector("[data-printer]").value;
+        const dimensions = {
+          "2 × 1 inch": ["2in", "1in"],
+          "3 × 2 inch": ["3in", "2in"],
+          "4 × 2 inch": ["4in", "2in"]
+        };
+        const [labelWidth, labelHeight] = dimensions[size] || dimensions["2 × 1 inch"];
+        const preview = openPrintPreview();
+        if (!preview) return status(root, "The browser blocked the print preview. Allow pop-ups for apps.knack.com, then try again.", true);
+        const user = await currentUser();
         try {
-          const dimensions = {
-            "2 × 1 inch": ["2in", "1in"],
-            "3 × 2 inch": ["3in", "2in"],
-            "4 × 2 inch": ["4in", "2in"]
-          };
-          const [labelWidth, labelHeight] = dimensions[size] || dimensions["2 × 1 inch"];
           for (const entry of state.queue) {
             await create(PAGE.labels.addLog, {
               [FIELD.label.code]: code("PRINT"),
@@ -1028,10 +1037,13 @@
               [FIELD.label.reprint]: entry.reprint
             });
           }
-          printLabels(state.queue, labelWidth, labelHeight);
+          printLabels(state.queue, labelWidth, labelHeight, preview);
           state.queue.forEach(entry => { entry.reprint = true; });
-          status(root, "Print job opened and logged successfully.");
-        } catch (error) { status(root, error.message, true); }
+          status(root, "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
+        } catch (error) {
+          try { preview.document.body.innerHTML = `<main style="max-width:520px;margin:12vh auto;padding:28px;font-family:Arial,sans-serif;text-align:center"><h1>Unable to prepare labels</h1><p>${html(error.message)}</p></main>`; } catch { }
+          status(root, error.message, true);
+        }
       });
       renderQueue();
       status(root, "");
