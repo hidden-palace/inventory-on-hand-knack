@@ -206,9 +206,12 @@
       profile_16: "General Manager - Admin", profile_13: "Sales", profile_7: "Inventorist",
       profile_5: "Designer", profile_20: "Dev", profile_6: "Deliverer", profile_4: "Branch Manager"
     };
-    const values = user?.roles || user?.role_names || user?.profile_keys_raw || user?.profile_keys ||
-      user?.values?.roles || user?.values?.user_roles || user?.values?.profile_keys_raw || user?.values?.profile_keys || [];
-    return (Array.isArray(values) ? values : [values])
+    const sources = [
+      user?.roles, user?.role_names, user?.profile_keys_raw, user?.profile_keys,
+      user?.values?.roles, user?.values?.user_roles, user?.values?.profile_keys_raw, user?.values?.profile_keys
+    ];
+    const values = sources.flatMap(value => value == null ? [] : (Array.isArray(value) ? value : [value]));
+    return values
       .map(role => role?.name || role?.identifier || role?.label || profileLabels[role?.id || role] || role)
       .filter(Boolean)
       .map(String);
