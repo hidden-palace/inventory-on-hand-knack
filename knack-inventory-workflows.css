@@ -909,6 +909,12 @@ body:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488) #root {
   color: var(--or-white);
 }
 .iw-secondary-full { border-color: var(--or-pink) !important; background: var(--or-pink) !important; color: var(--or-ink) !important; }
+.iw-screen-transfers [data-new] {
+  border-color: var(--or-pink) !important;
+  background: var(--or-pink) !important;
+  color: var(--or-ink) !important;
+}
+.iw-screen-transfers [data-new]:hover { border-color: var(--or-black) !important; background: #f7bad5 !important; }
 
 .iw-status {
   border-color: var(--or-green);
