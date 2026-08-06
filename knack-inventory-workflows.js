@@ -33,6 +33,7 @@
       logs: { scene: "scene_484", view: "view_1037" },
       addLog: { scene: "scene_484", view: "view_1038" },
       items: { scene: "scene_484", view: "view_1039" },
+      prices: { scene: "scene_463", view: "view_1003" },
       transactions: { scene: "scene_484", view: "view_1040" },
       hidden: ["view_1037", "view_1038", "view_1039", "view_1040"]
     },
@@ -46,6 +47,7 @@
     item: {
       name: "field_721", supplierSku: "field_724", sku: "field_725",
       category: "field_727", unit: "field_728", cost: "field_730",
+      price: "field_731",
       image: "field_739", status: "field_738", reorder: "field_749",
       imageUrl: "field_769", reorderQuantity: "field_770", barcode: "field_771"
     },
@@ -267,6 +269,7 @@
   const update = (view, id, body) => request(view, { method: "PUT", id, body });
 
   function item(record) {
+    const sellingPrice = raw(record, FIELD.item.price);
     return {
       id: record.id,
       name: raw(record, FIELD.item.name) || "Unnamed item",
@@ -276,6 +279,7 @@
       category: raw(record, FIELD.item.category),
       unit: raw(record, FIELD.item.unit),
       cost: numeric(raw(record, FIELD.item.cost)),
+      price: sellingPrice === undefined || sellingPrice === null || sellingPrice === "" ? null : numeric(sellingPrice),
       status: raw(record, FIELD.item.status),
       reorder: numeric(raw(record, FIELD.item.reorder)),
       reorderQuantity: numeric(raw(record, FIELD.item.reorderQuantity)),
@@ -450,7 +454,11 @@
         });
       });
       const initial = new URLSearchParams(location.search).get("sku");
-      render(findProduct(state.products, initial || "UTC-CTR-003") || state.products[0]);
+      if (initial) render(findProduct(state.products, initial));
+      else {
+        status(root, "");
+        root.querySelector("[data-search]").focus();
+      }
     } catch (error) {
       status(root, error.message || "Unable to load inventory.", true);
     }
@@ -733,7 +741,7 @@
         state.locations = locationRows.map(mapLocation);
         state.selected = state.counts.find(row => row.id === preferredId) ||
           state.counts.find(row => /draft|progress/i.test(String(raw(row, FIELD.count.status)))) ||
-          state.counts[0] || null;
+          null;
         const selectedLocation = state.selected ? raw(state.selected, FIELD.count.location) : state.locations[0]?.name;
         root.querySelector("[data-subtitle]").textContent = `${raw(state.selected, FIELD.count.code) || "New count"} · ${selectedLocation || "Inventory"} · ${raw(state.selected, FIELD.count.status) || "Ready"}`;
         renderCounts();
@@ -890,7 +898,8 @@
 
   function labelMarkup(product) {
     const code = product.barcode || product.supplierSku || product.sku;
-    return `<strong>${html(product.name)}</strong><span>${html(product.sku || product.supplierSku)}</span>${code128Svg(code)}<b>${html(code)}</b>`;
+    const price = product.price == null ? "Price unavailable" : money.format(product.price);
+    return `<div class="iw-label-heading"><strong>${html(product.name)}</strong><em>${html(price)}</em></div><span class="iw-label-sku">${html(product.sku || product.supplierSku)}</span>${code128Svg(code)}<b>${html(code)}</b>`;
   }
 
   function printLabels(entries, labelWidth, labelHeight) {
@@ -911,8 +920,10 @@
       html, body { margin: 0; padding: 0; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; }
       .iw-print-label { width: ${labelWidth}; height: ${labelHeight}; padding: .08in; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-after: page; page-break-after: always; }
       .iw-print-label:last-child { break-after: auto; page-break-after: auto; }
-      .iw-print-label strong { display: block; max-width: 100%; overflow: hidden; font-size: 9pt; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
-      .iw-print-label span { font-size: 7pt; line-height: 1; }
+      .iw-label-heading { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: .05in; }
+      .iw-print-label strong { display: block; min-width: 0; overflow: hidden; font-size: 9pt; line-height: 1.05; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+      .iw-print-label em { flex: none; font-size: 10pt; line-height: 1; font-style: normal; font-weight: 700; }
+      .iw-print-label span { width: 100%; font-size: 7pt; line-height: 1; text-align: left; }
       .iw-print-label .iw-barcode { display: block; width: 92%; height: .42in; margin: .02in auto; overflow: visible; }
       .iw-print-label .iw-barcode rect { fill: #000 !important; }
       .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
@@ -934,10 +945,15 @@
     root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
-      const [itemRows, txRows, locationRows] = await Promise.all([
-        records(PAGE.labels.items), records(PAGE.labels.transactions), records(PAGE.lookup.locations)
+      const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
+        records(PAGE.labels.items), records(PAGE.labels.prices), records(PAGE.labels.transactions), records(PAGE.lookup.locations)
       ]);
-      const state = { products: itemRows.map(item), transactions: txRows.map(transaction), queue: [] };
+      const pricesById = new Map(priceRows.map(row => [row.id, row]));
+      const state = {
+        products: itemRows.map(row => item({ ...(pricesById.get(row.id) || {}), ...row })),
+        transactions: txRows.map(transaction),
+        queue: []
+      };
       const userName = await currentUser();
       const activeLocations = locationRows.map(mapLocation);
       root.querySelector("[data-subtitle]").textContent = `${userName} · ${activeLocations[0]?.name || "Inventory"}`;

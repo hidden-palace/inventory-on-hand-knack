@@ -580,6 +580,10 @@
 }
 .iw-label-preview strong { display: block; font-size: 14px; }
 .iw-label-preview > span { display: none; }
+.iw-label-preview > .iw-label-sku { display: block; margin-top: 2px; color: var(--iw-muted-mobile); font-size: 11px; }
+.iw-label-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.iw-label-heading strong { min-width: 0; }
+.iw-label-heading em { flex: none; color: var(--iw-text-mobile); font-size: 16px; font-style: normal; font-weight: 800; }
 .iw-label-preview .iw-barcode { width: 66%; height: 45px; margin: 8px auto 2px; }
 .iw-label-preview b { display: block; text-align: center; font-size: 11px; letter-spacing: .24em; }
 
