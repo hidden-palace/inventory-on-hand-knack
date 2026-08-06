@@ -949,6 +949,7 @@
       const renderQueue = () => {
         const queue = root.querySelector("[data-queue]");
         queue.innerHTML = state.queue.map((entry, index) => `<div class="iw-queue-row"><span><strong>${html(entry.product.name)}</strong><small>Item code ${html(entry.product.sku || entry.product.supplierSku)}</small></span><input aria-label="Quantity for ${html(entry.product.name)}" data-qty-index="${index}" type="number" min="1" value="${entry.quantity}"><button data-remove="${index}" aria-label="Remove ${html(entry.product.name)}">×</button></div>`).join("") || `<p class="iw-empty">Scan an item to build the print queue.</p>`;
+        root.querySelector("[data-clear]").hidden = !state.queue.length;
         updatePrintSummary();
         root.querySelector("[data-preview]").innerHTML = state.queue[0] ? labelMarkup(state.queue[0].product) : `<span>Barcode preview</span>`;
       };
