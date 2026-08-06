@@ -185,12 +185,20 @@
   }
   async function currentUserRecord() {
     try {
-      return globalThis.__inventoryUser || await Promise.race([
+      const cached = globalThis.__inventoryUser || null;
+      const fresh = await Promise.race([
         globalThis.Knack?.getUser?.(),
         new Promise(resolve => setTimeout(() => resolve(null), 3000))
       ]);
+      if (!fresh) return cached;
+      const merged = { ...(cached || {}), ...fresh };
+      for (const key of ["roles", "role_names", "profile_keys", "profile_keys_raw", "values"]) {
+        if (fresh?.[key] == null && cached?.[key] != null) merged[key] = cached[key];
+      }
+      globalThis.__inventoryUser = merged;
+      return merged;
     } catch {
-      return null;
+      return globalThis.__inventoryUser || null;
     }
   }
   function roleNames(user) {
@@ -199,7 +207,7 @@
       profile_5: "Designer", profile_20: "Dev", profile_6: "Deliverer", profile_4: "Branch Manager"
     };
     const values = user?.roles || user?.role_names || user?.profile_keys_raw || user?.profile_keys ||
-      user?.values?.roles || user?.values?.user_roles || user?.values?.profile_keys || [];
+      user?.values?.roles || user?.values?.user_roles || user?.values?.profile_keys_raw || user?.values?.profile_keys || [];
     return (Array.isArray(values) ? values : [values])
       .map(role => role?.name || role?.identifier || role?.label || profileLabels[role?.id || role] || role)
       .filter(Boolean)
