@@ -772,6 +772,193 @@
   .iw-label-settings { grid-template-columns: 1fr 1fr; }
 }
 
+/* Orchid Republic brand layer. Structure remains scanner-first; only visual tokens change. */
+#scene_481 #view_1022,
+#scene_482 #view_1026,
+#scene_483 #view_1031,
+#scene_484 #view_1036,
+#scene_488 #view_1049 {
+  --or-pink: #f4a9cb;
+  --or-black: #000000;
+  --or-ink: #171717;
+  --or-white: #ffffff;
+  --or-ivory: #fffcf1;
+  --or-blush: #d8b9b1;
+  --or-coral: #f9afa0;
+  --or-green: #478f7d;
+  --or-gold: #c9a96a;
+  --or-muted: #6d6563;
+  --or-border: #e8d7d1;
+  --iw-navy: var(--or-black);
+  --iw-green: var(--or-green);
+  --iw-green-soft: #eff7f4;
+  --iw-page: var(--or-ivory);
+  --iw-panel: var(--or-white);
+  --iw-input: var(--or-white);
+  --iw-border-mobile: var(--or-blush);
+  --iw-rule-mobile: var(--or-border);
+  --iw-text-mobile: var(--or-ink);
+  --iw-muted-mobile: var(--or-muted);
+  color: var(--or-ink);
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+}
+
+body:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488),
+body:has(#scene_481, #scene_482, #scene_483, #scene_484, #scene_488) #root {
+  background: var(--or-ivory, #fffcf1) !important;
+}
+
+.iw-shell {
+  border-color: var(--or-border);
+  border-radius: 12px;
+  background: var(--or-white);
+  box-shadow: 0 4px 18px rgb(23 23 23 / .06);
+}
+.iw-topbar {
+  border-bottom: 5px solid var(--or-pink);
+  background: var(--or-black);
+}
+.iw-topbar h1,
+.iw-dialog h2 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.iw-topbar h1 { color: var(--or-white); }
+.iw-topbar .iw-eyebrow { color: var(--or-pink); letter-spacing: .10em; }
+.iw-subtitle { color: #f3ece8; }
+.iw-refresh-button,
+.iw-refresh-button:hover {
+  border-color: var(--or-pink) !important;
+  border-radius: 6px !important;
+  background: var(--or-pink) !important;
+  color: var(--or-black) !important;
+}
+.iw-refresh-button:focus-visible { outline-color: var(--or-white); }
+
+.iw-shell label,
+.iw-section-label { color: var(--or-muted); letter-spacing: .10em; }
+.iw-shell input,
+.iw-shell select,
+.iw-shell textarea,
+.iw-select-display {
+  border-color: var(--or-blush);
+  border-radius: 6px;
+  background: var(--or-white);
+  color: var(--or-ink);
+}
+.iw-shell input::placeholder,
+.iw-shell textarea::placeholder { color: #8a817e; }
+.iw-shell input:focus,
+.iw-shell select:focus,
+.iw-shell textarea:focus {
+  border-color: var(--or-black);
+  outline: 3px solid rgb(244 169 203 / .45);
+}
+
+.iw-scan-control {
+  border-color: var(--or-black);
+  border-radius: 6px;
+}
+.iw-scan-control button,
+.iw-shell .iw-scan-control button:hover { color: var(--or-black); }
+.iw-compact-product {
+  border-color: var(--or-pink);
+  border-radius: 12px;
+  background: #fff4f8;
+}
+.iw-compact-product strong { color: var(--or-black); }
+.iw-compact-panel,
+.iw-movement-card,
+.iw-count-lines,
+.iw-request-lines,
+.iw-scanned-product,
+.iw-counted-control {
+  border-color: var(--or-border);
+  border-radius: 12px;
+  background: var(--or-white);
+}
+.iw-movement-card,
+.iw-note,
+.iw-request-alert,
+.iw-workflow-message {
+  border-color: var(--or-border);
+  background: var(--or-ivory);
+  color: var(--or-muted);
+}
+.iw-workflow-message { border-left-color: var(--or-pink); }
+.iw-movement-card strong,
+.iw-counted-control b { color: var(--or-ink); }
+.iw-balance-total { border-top-color: var(--or-blush); }
+
+.iw-shell button {
+  border-color: var(--or-blush);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--or-ink);
+  transition: background-color 160ms cubic-bezier(.2, 0, 0, 1), border-color 160ms cubic-bezier(.2, 0, 0, 1), transform 160ms cubic-bezier(.2, 0, 0, 1);
+}
+.iw-shell button:hover { border-color: var(--or-black); background: #fff4f8; }
+.iw-shell button:active { transform: translateY(1px); }
+.iw-shell button.iw-primary,
+.iw-shell button.iw-primary:hover,
+.iw-shell button.iw-success-button,
+.iw-shell button.iw-success-button:hover {
+  border-color: var(--or-black);
+  background: var(--or-black);
+  color: var(--or-white);
+}
+.iw-secondary-full { border-color: var(--or-pink) !important; background: var(--or-pink) !important; color: var(--or-ink) !important; }
+
+.iw-status {
+  border-color: var(--or-green);
+  background: #eff7f4;
+  color: #376e5a;
+}
+.iw-status.iw-error { border-color: #a53f50; background: #fff2f4; color: #a53f50; }
+.iw-request-item { border-color: var(--or-border) !important; background: var(--or-white) !important; }
+.iw-request-item:hover { border-color: var(--or-pink) !important; background: #fff8fb !important; }
+.iw-request-item.is-selected { border-color: var(--or-pink) !important; background: #fff0f6 !important; }
+.iw-request-item .iw-pill {
+  background: var(--or-pink);
+  color: var(--or-ink);
+}
+
+.iw-menu-icon {
+  border-radius: 12px;
+  background: #fff0f6;
+  color: var(--or-black);
+}
+.iw-menu-card { border-color: var(--or-border) !important; background: var(--or-white) !important; }
+.iw-menu-card strong { color: var(--or-ink); }
+.iw-menu-card small { color: var(--or-muted); }
+.iw-shell button.iw-menu-card-primary,
+.iw-shell button.iw-menu-card-primary:hover {
+  border-color: var(--or-black) !important;
+  background: var(--or-black) !important;
+}
+.iw-menu-card-primary strong { color: var(--or-white); }
+.iw-menu-card-primary small { color: #f3ece8; }
+.iw-menu-card-primary .iw-menu-icon { background: var(--or-pink); color: var(--or-black); }
+
+.iw-product-scan {
+  border-color: var(--or-green);
+  border-radius: 12px;
+  background: #eff7f4;
+}
+.iw-auto-fields { border-top-color: var(--or-border); }
+.iw-auto-fields span { border-color: var(--or-border); background: var(--or-ivory); color: var(--or-muted); }
+.iw-label-preview { border-color: var(--or-blush); border-radius: 12px; background: var(--or-white); color: var(--or-black); }
+.iw-dialog {
+  border-color: var(--or-border);
+  border-radius: 20px;
+  background: var(--or-white);
+  color: var(--or-ink);
+  box-shadow: 0 16px 48px rgb(23 23 23 / .14);
+}
+.iw-dialog h2 { color: var(--or-black); }
+.iw-dialog::backdrop { background: rgb(23 23 23 / .58); }
+
 @media print {
   body.iw-printing * { visibility: hidden !important; }
   body.iw-printing #scene_484 #view_1036 .iw-print-sheet,
