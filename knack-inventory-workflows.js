@@ -56,7 +56,8 @@
       source: "field_754", destination: "field_755", type: "field_756",
       quantity: "field_757", cost: "field_758", date: "field_759",
       reference: "field_760", sku: "field_761", notes: "field_762",
-      image: "field_763", user: "field_764", barcode: "field_772"
+      image: "field_763", user: "field_764", barcode: "field_772",
+      substitutedFor: "field_832"
     },
     location: {
       name: "field_740", code: "field_742", type: "field_743", status: "field_744"
@@ -1160,6 +1161,13 @@
       const extraField = config.extraLabel
         ? `<label>${config.extraLabel}${config.extraRequired ? `<em>Required</em>` : `<em class="iw-optional">Optional</em>`}<input data-extra placeholder="${html(config.extraPlaceholder)}"></label>`
         : "";
+      const substitutionField = screen === "usage"
+        ? `<label>Substituted for<em class="iw-optional">Optional</em><input data-substitution-search list="iw-substitution-products" autocomplete="off" placeholder="Scan or search the product required by the recipe"><small class="iw-field-help">Leave blank for normal usage. Stock is deducted only from the product used above.</small><datalist id="iw-substitution-products">${state.products.map(product => {
+            const identifier = product.barcode || product.supplierSku || product.sku || product.name;
+            const description = [product.name, product.sku].filter(Boolean).join(" · ");
+            return `<option value="${html(identifier)}">${html(description)}</option>`;
+          }).join("")}</datalist></label>`
+        : "";
       const locationFields = config.direction === "transfer"
         ? `<label>Source location<em>Required</em><select data-source><option value="">Select location</option>${locationOptions}</select></label><label>Destination location<em>Required</em><select data-destination><option value="">Select store</option>${locationOptions}</select></label>`
         : `<label>${config.locationLabel}<em>Required</em><select data-location><option value="">Select location</option>${locationOptions}</select></label>`;
@@ -1169,6 +1177,7 @@
         <article class="iw-scanned-product"><strong data-product-name>— product loads on scan —</strong><span>SKU: <b data-product-code>—</b></span><span>On hand: <b data-product-on-hand>—</b></span></article>
         <label>${config.quantityLabel}<em>Required</em><input data-quantity class="iw-large-quantity" type="number" step="${config.direction === "adjust" ? "1" : "1"}" ${config.direction === "adjust" ? "" : "min=\"1\""} value="0"></label>
         ${extraField}
+        ${substitutionField}
         <button data-save-transaction class="iw-success-button iw-full-button">${config.saveLabel}</button>
         <div class="iw-auto-fields"><strong>Set automatically — not on screen</strong><span>Type = ${html(config.displayType || config.type)}</span><span>${html(config.autoLocation)}</span><span>Unit Cost = product cost</span><span>Date = now</span><span>Employee = me</span><span>No. = ${config.prefix}-####</span></div>
       </div>`;
@@ -1235,6 +1244,10 @@
         }
         const extra = root.querySelector("[data-extra]")?.value.trim() || "";
         if (config.extraRequired && !extra) return status(root, `${config.extraLabel} is required.`, true);
+        const substitutionQuery = root.querySelector("[data-substitution-search]")?.value.trim() || "";
+        const substitutedProduct = substitutionQuery ? findProduct(state.products, substitutionQuery) : null;
+        if (substitutionQuery && !substitutedProduct) return status(root, "Select a valid product that was substituted.", true);
+        if (substitutedProduct?.id === state.selected.id) return status(root, "The used product and substituted product must be different.", true);
         const transactionCode = code(config.prefix);
         const body = {
           [FIELD.transaction.code]: transactionCode,
@@ -1250,6 +1263,7 @@
         if (destinationId) body[FIELD.transaction.destination] = destinationId;
         if (extra && !config.extraToNotes) body[FIELD.transaction.reference] = extra;
         if (extra && config.extraToNotes) body[FIELD.transaction.notes] = extra;
+        if (substitutedProduct?.id) body[FIELD.transaction.substitutedFor] = substitutedProduct.id;
         if (userRecord?.id) body[FIELD.transaction.user] = userRecord.id;
         try {
           root.querySelector("[data-save-transaction]").disabled = true;
@@ -1258,6 +1272,7 @@
           root.querySelector("[data-product-search]").value = "";
           root.querySelector("[data-quantity]").value = "0";
           if (root.querySelector("[data-extra]")) root.querySelector("[data-extra]").value = "";
+          if (root.querySelector("[data-substitution-search]")) root.querySelector("[data-substitution-search]").value = "";
           state.selected = null;
           root.querySelector("[data-product-name]").textContent = "— product loads on scan —";
           root.querySelector("[data-product-code]").textContent = "—";

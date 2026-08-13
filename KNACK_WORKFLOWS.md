@@ -24,6 +24,9 @@ the custom interface mounts into the first Rich Text element.
 ## Transaction and print behavior
 
 - Lookup balances are derived from immutable Inventory Transaction records.
+- Record Usage can optionally connect `Substituted For` (`field_832`) to the
+  Price List product originally required; inventory is deducted only from the
+  product actually scanned and used.
 - A transfer request snapshots source-location availability when each line is
   added.
 - A count line stores the counted quantity, system snapshot, and variance.

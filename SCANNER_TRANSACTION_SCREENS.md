@@ -127,6 +127,11 @@ Required on-screen fields:
 - Quantity used
 - Order number
 
+Optional on-screen field:
+
+- Substituted for — select the product the recipe originally required. Leave
+  blank when the scanned product is not a substitute.
+
 Automatically mapped:
 
 - Transaction Type = Order Usage
@@ -138,8 +143,11 @@ Automatically mapped:
 - Transaction Date = current date/time
 - Created By = logged-in user
 - Transaction Code = generated `USE-####`-style code
+- Substituted For = connected Price List record when supplied
 
-Inventory effect: subtract quantity from the source location.
+Inventory effect: subtract quantity only from the scanned product at the source
+location. The optional substituted product is stored for traceability and does
+not create a second inventory movement.
 
 Dependency:
 

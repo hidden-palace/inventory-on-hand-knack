@@ -663,6 +663,14 @@
   letter-spacing: .04em;
 }
 .iw-transaction-form label > em.iw-optional { color: #8b98ab; }
+.iw-field-help {
+  display: block;
+  margin-top: 5px;
+  color: #6d7888;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
 .iw-product-scan {
   min-height: 70px;
   margin-top: 5px;
