@@ -12,14 +12,22 @@ window.INVENTORY_CONFIG = {
   views: {
     items: { scene: "scene_463", view: "view_1003" },
     itemDetails: { scene: "scene_464", view: "view_1004" },
+    productImages: [
+      { scene: "scene_475", view: "view_1019" },
+      { scene: "scene_35", view: "view_62" },
+      { scene: "scene_446", view: "view_977" }
+    ],
     transactions: { scene: "scene_470", view: "view_1008" }
   },
   fields: {
     item: {
-      name:"field_721", photo:"field_739", sku:"field_725",
+      name:"field_721", photo:"field_739", photoUrl:"field_769", sku:"field_725",
       barcode:"field_724", category:"field_727", vendor:"field_733",
       unit:"field_728", status:"field_738", reorderPoint:"field_749",
-      reorderQuantity:"", lastPurchaseCost:"field_730"
+      reorderQuantity:"field_770", lastPurchaseCost:"field_730"
+    },
+    product: {
+      potSku:"field_82", photo:"field_78"
     },
     transaction: {
       itemCode:"field_753", sku:"field_761", date:"field_759",

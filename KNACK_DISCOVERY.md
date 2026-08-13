@@ -30,6 +30,20 @@ The schema inspection established that inventory items come from **Price List** 
 | Status | `field_738` |
 | Supplier | `field_733` |
 | Reorder Point | `field_749` |
+| Item Image URL | `field_769` |
+| Re-Order Quantity | `field_770` |
+
+The Item Image URL is preferred when present, with the original Item Image upload
+field retained as a fallback. Both new fields are exposed by the Price List
+details view (`scene_464` / `view_1004`) so they can be read safely from the
+browser without using the private object API.
+
+If both Price List image fields are empty, the app also checks the Product table
+for a record whose Pot SKU (`field_82`) matches the Price List Supplier SKU
+(`field_724`) and uses Product Image (`field_78`). The Product lookup uses the
+hidden Product lookup view on the Inventory On Hand page (`scene_475` /
+`view_1019`). The existing role-specific Product views (`scene_35` / `view_62`
+and `scene_446` / `view_977`) remain as fallbacks.
 
 Supported view-based sources used by the frontend:
 
