@@ -32,7 +32,8 @@ the custom interface mounts into the first Rich Text element.
 - A count line stores the counted quantity, system snapshot, and variance.
 - Count submission and transfer approval update through secured Edit Record
   forms.
-- Label printing uses the browser print dialog for the installed Zebra printer
-  and records each print/reprint in Inventory Label Print Logs.
+- Label printing is fixed to 3 × 2 inch media for the Zebra ZD421. The browser
+  print dialog must target the installed printer at 100% scale. Each print
+  request/reprint is recorded in Inventory Label Print Logs.
 - Silent direct Zebra printing requires a separately approved local bridge such
   as QZ Tray or PrintNode; no browser-only page can bypass the print dialog.

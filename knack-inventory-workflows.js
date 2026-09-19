@@ -96,6 +96,8 @@
 
   const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+  const LABEL_SIZE = "3 × 2 inch";
+  const LABEL_PRINTER = "Zebra ZD421";
 
   function raw(record, key) {
     const value = record?.[key + "_raw"] ?? record?.[key];
@@ -913,7 +915,7 @@
     return preview;
   }
 
-  function printLabels(entries, labelWidth, labelHeight, preview) {
+  function printLabels(entries, preview) {
     const labels = entries.flatMap(entry =>
       Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
         `<section class="iw-print-label">${labelMarkup(entry.product)}</section>`
@@ -922,23 +924,23 @@
     const printDocument = preview.document;
     printDocument.open();
     printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>
-      @page { size: ${labelWidth} ${labelHeight}; margin: 0; }
+      @page { size: 3in 2in; margin: 0; }
       * { box-sizing: border-box; }
       html, body { margin: 0; padding: 0; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; }
       .iw-print-toolbar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #e5e7eb; background: #fff; color: #475569; font-size: 13px; }
       .iw-print-toolbar button { min-height: 42px; padding: 0 18px; border: 0; border-radius: 8px; background: #982a86; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-      .iw-print-label { width: ${labelWidth}; height: ${labelHeight}; padding: .08in; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-after: page; page-break-after: always; }
+      .iw-print-label { width: 3in; height: 2in; padding: .08in; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-after: page; page-break-after: always; }
       .iw-print-label:last-child { break-after: auto; page-break-after: auto; }
       .iw-label-heading { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: .05in; }
       .iw-print-label strong { display: block; min-width: 0; overflow: hidden; font-size: 9pt; line-height: 1.05; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
       .iw-print-label em { flex: none; font-size: 10pt; line-height: 1; font-style: normal; font-weight: 700; }
       .iw-print-label span { width: 100%; font-size: 7pt; line-height: 1; text-align: left; }
-      .iw-print-label .iw-barcode { display: block; width: 92%; height: .42in; margin: .02in auto; overflow: visible; }
+      .iw-print-label .iw-barcode { display: block; width: 92%; height: .52in; margin: .06in auto; overflow: visible; }
       .iw-print-label .iw-barcode rect { fill: #000 !important; }
       .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
       @media screen { body { background: #f1f5f9; } .iw-print-label { margin: 18px auto; background: #fff; box-shadow: 0 3px 12px rgba(15,23,42,.14); } }
       @media print { .iw-print-toolbar { display: none !important; } .iw-print-label { margin: 0; box-shadow: none; } }
-    </style></head><body><div class="iw-print-toolbar"><button type="button" onclick="window.print()">Print / Save as PDF</button><span>In the Windows print dialog, choose “Save as PDF” to download a PDF.</span></div>${labels}</body></html>`);
+    </style></head><body><div class="iw-print-toolbar"><button type="button" onclick="window.print()">Print / Save as PDF</button><span>Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or Save as PDF.</span></div>${labels}</body></html>`);
     printDocument.close();
     preview.focus();
     setTimeout(() => {
@@ -950,7 +952,7 @@
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
     wireRefresh(root, () => mountLabels(host));
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><label>Label size<select data-size><option>2 × 1 inch</option><option>3 × 2 inch</option><option>4 × 2 inch</option></select></label><label>Printer<select data-printer><option>Zebra — PAL</option></select></label></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Reprints are logged — printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Select the Zebra ZD421 in the print dialog. Use 3 × 2 inch media at 100% scale. Reprints are logged; printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
@@ -1010,14 +1012,6 @@
       });
       root.querySelector("[data-print]").addEventListener("click", async () => {
         if (!state.queue.length) return status(root, "Add at least one item to the print queue.", true);
-        const size = root.querySelector("[data-size]").value;
-        const printer = root.querySelector("[data-printer]").value;
-        const dimensions = {
-          "2 × 1 inch": ["2in", "1in"],
-          "3 × 2 inch": ["3in", "2in"],
-          "4 × 2 inch": ["4in", "2in"]
-        };
-        const [labelWidth, labelHeight] = dimensions[size] || dimensions["2 × 1 inch"];
         const preview = openPrintPreview();
         if (!preview) return status(root, "The browser blocked the print preview. Allow pop-ups for apps.knack.com, then try again.", true);
         const user = await currentUser();
@@ -1031,14 +1025,14 @@
               [FIELD.label.supplierSku]: entry.product.supplierSku,
               [FIELD.label.name]: entry.product.name,
               [FIELD.label.quantity]: entry.quantity,
-              [FIELD.label.size]: size,
-              [FIELD.label.printer]: printer,
+              [FIELD.label.size]: LABEL_SIZE,
+              [FIELD.label.printer]: LABEL_PRINTER,
               [FIELD.label.printedBy]: user,
               [FIELD.label.printedAt]: knackDate(),
               [FIELD.label.reprint]: entry.reprint
             });
           }
-          printLabels(state.queue, labelWidth, labelHeight, preview);
+          printLabels(state.queue, preview);
           state.queue.forEach(entry => { entry.reprint = true; });
           status(root, "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
         } catch (error) {
