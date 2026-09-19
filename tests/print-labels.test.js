@@ -51,7 +51,7 @@ test("ZD421 labels are fixed at 3 by 2 inches and retain barcode and price", () 
   assert.doesNotMatch(markup, /size: 2in 1in|size: 4in 2in/);
 });
 
-test("iPhone label preview does not automatically open AirPrint for a USB ZD421", () => {
+test("iPhone label preview does not automatically open AirPrint for a paired ZD421", () => {
   const { printLabels, timers } = loadLabelCode("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)");
   let markup = "";
   printLabels([{ quantity: 1, product: { name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95 } }], {
@@ -59,7 +59,6 @@ test("iPhone label preview does not automatically open AirPrint for a USB ZD421"
     focus() {}
   });
   assert.equal(timers.length, 0);
-  assert.match(markup, /will not appear in AirPrint/);
-  assert.match(markup, /Windows computer connected to the printer/);
+  assert.match(markup, /Bluetooth does not make it available in iPhone AirPrint/);
   assert.doesNotMatch(markup, /onclick="window\.print\(\)"/);
 });

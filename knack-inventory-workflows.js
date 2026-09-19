@@ -921,7 +921,7 @@
 
   function printHelpText() {
     return isIOSPrintDevice()
-      ? "Preview only: this USB-connected Zebra ZD421 will not appear in AirPrint. Open Print Labels on the Windows computer connected to the printer to print these labels."
+      ? "Preview only: pairing the Zebra ZD421 over Bluetooth does not make it available in iPhone AirPrint. Printing from this web screen needs a configured print service; use a computer with the Zebra printer installed until that is set up."
       : "Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or save the labels as a PDF.";
   }
 
@@ -965,7 +965,7 @@
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
     wireRefresh(root, () => mountLabels(host));
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">${isIOSPrintDevice() ? "Preview Labels" : "Print Labels"}</button><p class="iw-note">${printHelpText()} Print attempts from the connected computer are logged; printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">${isIOSPrintDevice() ? "Preview Labels" : "Print Labels"}</button><p class="iw-note">${printHelpText()} Print attempts from a supported device are logged; printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
@@ -1030,7 +1030,7 @@
         if (!preview) return status(root, "The browser blocked the print preview. Allow pop-ups for apps.knack.com, then try again.", true);
         if (isIOSPrintDevice()) {
           printLabels(state.queue, preview);
-          return status(root, "Label preview opened. To print on the USB Zebra, use the Windows computer connected to it.");
+          return status(root, "Label preview opened. Bluetooth pairing alone cannot print from iPhone AirPrint; use a computer with the Zebra installed until an iPhone print service is configured.");
         }
         const user = await currentUser();
         try {
@@ -1052,9 +1052,7 @@
           }
           printLabels(state.queue, preview);
           state.queue.forEach(entry => { entry.reprint = true; });
-          status(root, isIOSPrintDevice()
-            ? "Label preview opened. This USB-connected Zebra will not appear in AirPrint; print from its connected Windows computer."
-            : "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
+          status(root, "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
         } catch (error) {
           try { preview.document.body.innerHTML = `<main style="max-width:520px;margin:12vh auto;padding:28px;font-family:Arial,sans-serif;text-align:center"><h1>Unable to prepare labels</h1><p>${html(error.message)}</p></main>`; } catch { }
           status(root, error.message, true);
