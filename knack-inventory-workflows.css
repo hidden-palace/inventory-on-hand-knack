@@ -552,6 +552,12 @@
 }
 .iw-fixed-setting span { display: block; color: var(--iw-muted-mobile); font-size: 11px; text-transform: uppercase; }
 .iw-fixed-setting strong { display: block; margin-top: 3px; color: var(--iw-navy); font-size: 14px; }
+.iw-zebra-file { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--iw-border-mobile); border-radius: 9px; background: #fff; }
+.iw-zebra-file summary { cursor: pointer; color: var(--iw-navy); font-weight: 650; }
+.iw-zebra-file label { display: block; margin: 12px 0 8px; }
+.iw-zebra-file select { width: 100%; margin-top: 5px; }
+.iw-zebra-file button { width: 100%; min-height: 42px; border-radius: 8px; }
+.iw-zebra-file small { display: block; margin-top: 9px; color: var(--iw-muted-mobile); line-height: 1.4; }
 .iw-queue-row {
   min-height: 30px;
   padding: 4px 0;

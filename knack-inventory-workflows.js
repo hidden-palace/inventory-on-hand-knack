@@ -921,8 +921,56 @@
 
   function printHelpText() {
     return isIOSPrintDevice()
-      ? "Preview only: pairing the Zebra ZD421 over Bluetooth does not make it available in iPhone AirPrint. Printing from this web screen needs a configured print service; use a computer with the Zebra printer installed until that is set up."
-      : "Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or save the labels as a PDF.";
+      ? "Bluetooth does not make it available in iPhone AirPrint. Preview here, or download a Zebra ZD421 file to send through a compatible Zebra utility."
+      : "Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or save as PDF. On Android, enable Zebra Print and connect by USB, network, or Bluetooth Classic (not setup-only Bluetooth LE).";
+  }
+
+  function zplText(value, limit = 64) {
+    const ascii = String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\x20-\x7e]/g, "?").slice(0, limit);
+    return [...ascii].map(char => `_${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`).join("");
+  }
+
+  function zebraLabelFile(entries, dpi = 300) {
+    if (![203, 300].includes(Number(dpi))) throw new Error("Choose 203 or 300 dpi.");
+    const scale = Number(dpi) / 300;
+    const dot = value => Math.round(value * scale);
+    const formats = [];
+    for (const entry of entries) {
+      const product = entry.product;
+      const barcode = String(product.barcode || product.supplierSku || product.sku || "").trim();
+      if (!/^[\x20-\x7e]{1,30}$/.test(barcode) || /[\^~>]/.test(barcode)) {
+        throw new Error(`Item ${product.sku || product.name || "unknown"} needs a printable barcode of at most 30 characters (no ^, ~, or >).`);
+      }
+      if (Number(dpi) === 203 && barcode.length > 20) {
+        throw new Error(`Item ${product.sku || product.name || "unknown"} has a barcode too long for a scannable 3 × 2 label at 203 dpi.`);
+      }
+      const copies = Math.floor(Number(entry.quantity));
+      if (!Number.isSafeInteger(copies) || copies < 1 || copies > 999) throw new Error("Each label quantity must be between 1 and 999.");
+      const name = zplText(product.name, 21);
+      const sku = zplText(product.sku || product.supplierSku, 34);
+      const price = zplText(product.price == null ? "Price unavailable" : money.format(product.price), 24);
+      // Exact 3 x 2 inches; positions scale for the printer's installed printhead resolution.
+      formats.push(`^XA\n^PW${Number(dpi) * 3}\n^LL${Number(dpi) * 2}\n^LH0,0\n^CI0\n` +
+        `^FO${dot(30)},${dot(26)}^A0N,${dot(36)},${dot(28)}^FH_^FD${name}^FS\n` +
+        `^FO${dot(660)},${dot(26)}^A0N,${dot(40)},${dot(30)}^FH_^FD${price}^FS\n` +
+        `^FO${dot(30)},${dot(100)}^A0N,${dot(28)},${dot(23)}^FH_^FD${sku}^FS\n` +
+        `^BY2,2,${dot(265)}\n^FO${dot(75)},${dot(175)}^BCN,${dot(265)},Y,N,N^FD${barcode}^FS\n` +
+        `^PQ${copies},0,0,N\n^XZ`);
+    }
+    return formats.join("\n") + "\n";
+  }
+
+  function downloadZebraLabels(entries, dpi) {
+    const file = new Blob([zebraLabelFile(entries, dpi)], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `inventory-labels-3x2-${dpi}dpi.zpl`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   function printLabels(entries, preview) {
@@ -965,7 +1013,7 @@
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
     wireRefresh(root, () => mountLabels(host));
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">${isIOSPrintDevice() ? "Preview Labels" : "Print Labels"}</button><p class="iw-note">${printHelpText()} Print attempts from a supported device are logged; printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">${isIOSPrintDevice() ? "Preview Labels" : "Print Labels"}</button><details class="iw-zebra-file"><summary>Zebra printer file (fallback)</summary><label>Printer resolution <select data-zpl-dpi><option value="300">300 dpi</option><option value="203">203 dpi</option></select></label><button data-download-zpl type="button">Download 3 × 2 Zebra file</button><small>Send the .zpl file with Zebra Setup Utilities on a computer. This downloads a file; it does not connect to or print on the printer by itself. Use the resolution printed on the printer configuration label.</small></details><p class="iw-note">${printHelpText()} Print attempts from a supported device are logged; printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
@@ -1057,6 +1105,14 @@
           try { preview.document.body.innerHTML = `<main style="max-width:520px;margin:12vh auto;padding:28px;font-family:Arial,sans-serif;text-align:center"><h1>Unable to prepare labels</h1><p>${html(error.message)}</p></main>`; } catch { }
           status(root, error.message, true);
         }
+      });
+      root.querySelector("[data-download-zpl]").addEventListener("click", () => {
+        if (!state.queue.length) return status(root, "Add at least one item to the print queue.", true);
+        try {
+          const dpi = Number(root.querySelector("[data-zpl-dpi]").value);
+          downloadZebraLabels(state.queue, dpi);
+          status(root, "Zebra file downloaded. Send it through Zebra Setup Utilities; downloading does not confirm printing.");
+        } catch (error) { status(root, error.message, true); }
       });
       renderQueue();
       status(root, "");

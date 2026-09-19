@@ -6,7 +6,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const source = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "knack-inventory-workflows.js"), "utf8");
-const instrumented = source.replace(/\}\)\(\);\s*$/, "globalThis.labelTest = { LABEL_SIZE, LABEL_PRINTER, printLabels }; })();");
+const instrumented = source.replace(/\}\)\(\);\s*$/, "globalThis.labelTest = { LABEL_SIZE, LABEL_PRINTER, printLabels, zebraLabelFile }; })();");
 
 function loadLabelCode(userAgent = "Windows") {
   const timers = [];
@@ -61,4 +61,30 @@ test("iPhone label preview does not automatically open AirPrint for a paired ZD4
   assert.equal(timers.length, 0);
   assert.match(markup, /Bluetooth does not make it available in iPhone AirPrint/);
   assert.doesNotMatch(markup, /onclick="window\.print\(\)"/);
+});
+
+test("ZPL fallback preserves 3 by 2 media, price, Code 128 and requested copies at either DPI", () => {
+  const { zebraLabelFile } = loadLabelCode();
+  const entries = [{ quantity: 2, product: { name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95 } }];
+  const high = zebraLabelFile(entries, 300);
+  const standard = zebraLabelFile(entries, 203);
+  assert.match(high, /\^PW900\n\^LL600/);
+  assert.match(standard, /\^PW609\n\^LL406/);
+  assert.match(high, /\^BCN,265,Y,N,N\^FD41636\^FS/);
+  assert.match(high, /\^FH_\^FD\_24\_32\_39\_2E\_39\_35\^FS/);
+  assert.match(high, /\^PQ2,0,0,N/);
+  assert.equal((high.match(/\^XA/g) || []).length, 1);
+});
+
+test("ZPL fallback rejects command injection, missing codes, bad DPI and invalid quantities", () => {
+  const { zebraLabelFile } = loadLabelCode();
+  const entry = { quantity: 1, product: { name: "Vase^XZ~JA", barcode: "41636", sku: "VASE", price: 12 } };
+  const safe = zebraLabelFile([entry]);
+  assert.equal((safe.match(/\^XZ/g) || []).length, 1);
+  assert.doesNotMatch(safe, /\^FDVase\^XZ/);
+  assert.throws(() => zebraLabelFile([{ ...entry, product: { ...entry.product, barcode: "A^XZ" } }]));
+  assert.throws(() => zebraLabelFile([{ ...entry, product: { name: "Empty" } }]));
+  assert.throws(() => zebraLabelFile([{ ...entry, quantity: 0 }]));
+  assert.throws(() => zebraLabelFile([{ ...entry, product: { ...entry.product, barcode: "123456789012345678901" } }], 203));
+  assert.throws(() => zebraLabelFile([entry], 600));
 });
