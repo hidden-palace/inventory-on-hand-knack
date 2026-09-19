@@ -915,6 +915,16 @@
     return preview;
   }
 
+  function isIOSPrintDevice(userAgent = globalThis.navigator?.userAgent || "") {
+    return /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && (globalThis.navigator?.maxTouchPoints || 0) > 1);
+  }
+
+  function printHelpText() {
+    return isIOSPrintDevice()
+      ? "A USB-connected Zebra ZD421 will not appear in AirPrint. Open Print Labels on the Windows computer connected to the printer to print these labels. Use the button below only if an AirPrint-compatible printer is available."
+      : "Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or save the labels as a PDF.";
+  }
+
   function printLabels(entries, preview) {
     const labels = entries.flatMap(entry =>
       Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
@@ -940,19 +950,21 @@
       .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
       @media screen { body { background: #f1f5f9; } .iw-print-label { margin: 18px auto; background: #fff; box-shadow: 0 3px 12px rgba(15,23,42,.14); } }
       @media print { .iw-print-toolbar { display: none !important; } .iw-print-label { margin: 0; box-shadow: none; } }
-    </style></head><body><div class="iw-print-toolbar"><button type="button" onclick="window.print()">Print / Save as PDF</button><span>Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or Save as PDF.</span></div>${labels}</body></html>`);
+    </style></head><body><div class="iw-print-toolbar"><button type="button" onclick="window.print()">Print / Save as PDF</button><span>${printHelpText()}</span></div>${labels}</body></html>`);
     printDocument.close();
     preview.focus();
-    setTimeout(() => {
-      try { preview.print(); } catch { }
-    }, 350);
+    if (!isIOSPrintDevice()) {
+      setTimeout(() => {
+        try { preview.print(); } catch { }
+      }, 350);
+    }
   }
 
   async function mountLabels(host) {
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
     wireRefresh(root, () => mountLabels(host));
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">Select the Zebra ZD421 in the print dialog. Use 3 × 2 inch media at 100% scale. Reprints are logged; printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">${printHelpText()} Label requests are logged; printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
@@ -1034,7 +1046,9 @@
           }
           printLabels(state.queue, preview);
           state.queue.forEach(entry => { entry.reprint = true; });
-          status(root, "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
+          status(root, isIOSPrintDevice()
+            ? "Label preview opened. This USB-connected Zebra will not appear in AirPrint; print from its connected Windows computer."
+            : "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
         } catch (error) {
           try { preview.document.body.innerHTML = `<main style="max-width:520px;margin:12vh auto;padding:28px;font-family:Arial,sans-serif;text-align:center"><h1>Unable to prepare labels</h1><p>${html(error.message)}</p></main>`; } catch { }
           status(root, error.message, true);
