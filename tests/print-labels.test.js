@@ -61,4 +61,5 @@ test("iPhone label preview does not automatically open AirPrint for a USB ZD421"
   assert.equal(timers.length, 0);
   assert.match(markup, /will not appear in AirPrint/);
   assert.match(markup, /Windows computer connected to the printer/);
+  assert.doesNotMatch(markup, /onclick="window\.print\(\)"/);
 });

@@ -921,11 +921,12 @@
 
   function printHelpText() {
     return isIOSPrintDevice()
-      ? "A USB-connected Zebra ZD421 will not appear in AirPrint. Open Print Labels on the Windows computer connected to the printer to print these labels. Use the button below only if an AirPrint-compatible printer is available."
+      ? "Preview only: this USB-connected Zebra ZD421 will not appear in AirPrint. Open Print Labels on the Windows computer connected to the printer to print these labels."
       : "Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or save the labels as a PDF.";
   }
 
   function printLabels(entries, preview) {
+    const ios = isIOSPrintDevice();
     const labels = entries.flatMap(entry =>
       Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
         `<section class="iw-print-label">${labelMarkup(entry.product)}</section>`
@@ -950,10 +951,10 @@
       .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
       @media screen { body { background: #f1f5f9; } .iw-print-label { margin: 18px auto; background: #fff; box-shadow: 0 3px 12px rgba(15,23,42,.14); } }
       @media print { .iw-print-toolbar { display: none !important; } .iw-print-label { margin: 0; box-shadow: none; } }
-    </style></head><body><div class="iw-print-toolbar"><button type="button" onclick="window.print()">Print / Save as PDF</button><span>${printHelpText()}</span></div>${labels}</body></html>`);
+    </style></head><body><div class="iw-print-toolbar">${ios ? "" : '<button type="button" onclick="window.print()">Print / Save as PDF</button>'}<span>${printHelpText()}</span></div>${labels}</body></html>`);
     printDocument.close();
     preview.focus();
-    if (!isIOSPrintDevice()) {
+    if (!ios) {
       setTimeout(() => {
         try { preview.print(); } catch { }
       }, 350);
@@ -964,7 +965,7 @@
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
     wireRefresh(root, () => mountLabels(host));
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><p class="iw-note">${printHelpText()} Label requests are logged; printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">${isIOSPrintDevice() ? "Preview Labels" : "Print Labels"}</button><p class="iw-note">${printHelpText()} Print attempts from the connected computer are logged; printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
@@ -982,7 +983,8 @@
       const updatePrintSummary = () => {
         const total = state.queue.reduce((sum, entry) => sum + Math.max(1, Math.floor(entry.quantity)), 0);
         root.querySelector("[data-total-labels]").textContent = number.format(total);
-        root.querySelector("[data-print]").textContent = total ? `Print ${number.format(total)} ${total === 1 ? "Label" : "Labels"}` : "Print Labels";
+        const action = isIOSPrintDevice() ? "Preview" : "Print";
+        root.querySelector("[data-print]").textContent = total ? `${action} ${number.format(total)} ${total === 1 ? "Label" : "Labels"}` : `${action} Labels`;
       };
       const renderQueue = () => {
         const queue = root.querySelector("[data-queue]");
@@ -1026,6 +1028,10 @@
         if (!state.queue.length) return status(root, "Add at least one item to the print queue.", true);
         const preview = openPrintPreview();
         if (!preview) return status(root, "The browser blocked the print preview. Allow pop-ups for apps.knack.com, then try again.", true);
+        if (isIOSPrintDevice()) {
+          printLabels(state.queue, preview);
+          return status(root, "Label preview opened. To print on the USB Zebra, use the Windows computer connected to it.");
+        }
         const user = await currentUser();
         try {
           for (const entry of state.queue) {
