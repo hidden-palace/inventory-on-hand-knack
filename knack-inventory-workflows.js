@@ -1061,9 +1061,9 @@
         if (entries.some(entry => !Number.isSafeInteger(Number(entry.quantity)) || Number(entry.quantity) < 1 || Number(entry.quantity) > 999)) {
           return status(root, "Each label quantity must be between 1 and 999.", true);
         }
+        status(root, "");
         try { printLabels(entries); }
         catch (error) { return status(root, `Unable to open printing: ${error.message}`, true); }
-        status(root, "Print dialog requested. Choose the Zebra ZD421 and 3 × 2 inch paper. The separate Download button does not print.");
         try {
           const user = await currentUser();
           for (const entry of entries) {
@@ -1092,7 +1092,7 @@
         try {
           const dpi = Number(root.querySelector("[data-zpl-dpi]").value);
           downloadZebraLabels(state.queue, dpi);
-          status(root, "Zebra file downloaded. Send it through Zebra Setup Utilities; downloading does not confirm printing.");
+          status(root, "");
         } catch (error) { status(root, error.message, true); }
       });
       renderQueue();
