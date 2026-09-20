@@ -63,6 +63,32 @@ test("iPhone label preview does not automatically open AirPrint for a paired ZD4
   assert.doesNotMatch(markup, /onclick="window\.print\(\)"/);
 });
 
+test("Android requests the print dialog immediately and retains a manual Print button", () => {
+  const { printLabels, timers } = loadLabelCode("Mozilla/5.0 (Linux; Android 15; Mobile) Chrome/120");
+  let markup = "";
+  let printCalls = 0;
+  printLabels([{ quantity: 1, product: { name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95 } }], {
+    document: { open() {}, write(value) { markup += value; }, close() {} },
+    focus() {},
+    print() { printCalls += 1; }
+  });
+  assert.equal(printCalls, 1);
+  assert.equal(timers.length, 0);
+  assert.match(markup, /onclick="window\.print\(\)"/);
+  assert.match(markup, /@page \{ size: 3in 2in; margin: 0; \}/);
+});
+
+test("Android keeps the preview usable when the immediate print call fails", () => {
+  const { printLabels } = loadLabelCode("Android 15");
+  let markup = "";
+  assert.doesNotThrow(() => printLabels([{ quantity: 1, product: { name: "Test", barcode: "41636", sku: "ABC", price: 1 } }], {
+    document: { open() {}, write(value) { markup += value; }, close() {} },
+    focus() {},
+    print() { throw new Error("No print service"); }
+  }));
+  assert.match(markup, /Print \/ Save as PDF/);
+});
+
 test("ZPL fallback preserves 3 by 2 media, price, Code 128 and requested copies at either DPI", () => {
   const { zebraLabelFile } = loadLabelCode();
   const entries = [{ quantity: 2, product: { name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95 } }];

@@ -919,6 +919,10 @@
     return /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && (globalThis.navigator?.maxTouchPoints || 0) > 1);
   }
 
+  function isAndroidPrintDevice(userAgent = globalThis.navigator?.userAgent || "") {
+    return /Android/i.test(userAgent);
+  }
+
   function printHelpText() {
     return isIOSPrintDevice()
       ? "Bluetooth does not make it available in iPhone AirPrint. Preview here, or download a Zebra ZD421 file to send through a compatible Zebra utility."
@@ -1002,7 +1006,10 @@
     </style></head><body><div class="iw-print-toolbar">${ios ? "" : '<button type="button" onclick="window.print()">Print / Save as PDF</button>'}<span>${printHelpText()}</span></div>${labels}</body></html>`);
     printDocument.close();
     preview.focus();
-    if (!ios) {
+    if (isAndroidPrintDevice()) {
+      // Keep this call in the original tap handler; Android may reject delayed print requests.
+      try { preview.print(); } catch { /* The preview's Print button remains available. */ }
+    } else if (!ios) {
       setTimeout(() => {
         try { preview.print(); } catch { }
       }, 350);
@@ -1074,15 +1081,21 @@
       });
       root.querySelector("[data-print]").addEventListener("click", async () => {
         if (!state.queue.length) return status(root, "Add at least one item to the print queue.", true);
+        const entries = state.queue.map(entry => ({ ...entry, product: entry.product }));
+        if (entries.some(entry => !Number.isSafeInteger(Number(entry.quantity)) || Number(entry.quantity) < 1 || Number(entry.quantity) > 999)) {
+          return status(root, "Each label quantity must be between 1 and 999.", true);
+        }
         const preview = openPrintPreview();
         if (!preview) return status(root, "The browser blocked the print preview. Allow pop-ups for apps.knack.com, then try again.", true);
+        try { printLabels(entries, preview); }
+        catch (error) { return status(root, `Unable to prepare labels: ${error.message}`, true); }
         if (isIOSPrintDevice()) {
-          printLabels(state.queue, preview);
           return status(root, "Label preview opened. Bluetooth pairing alone cannot print from iPhone AirPrint; use a computer with the Zebra installed until an iPhone print service is configured.");
         }
-        const user = await currentUser();
+        status(root, "Print dialog requested. If it did not open, use Print / Save as PDF in the preview. Select the Zebra ZD421 there.");
         try {
-          for (const entry of state.queue) {
+          const user = await currentUser();
+          for (const entry of entries) {
             await create(PAGE.labels.addLog, {
               [FIELD.label.code]: code("PRINT"),
               [FIELD.label.sourceType]: root.querySelector("[data-source]").value,
@@ -1098,12 +1111,9 @@
               [FIELD.label.reprint]: entry.reprint
             });
           }
-          printLabels(state.queue, preview);
           state.queue.forEach(entry => { entry.reprint = true; });
-          status(root, "Print preview opened. Use Print / Save as PDF in the preview if the system dialog does not appear automatically.");
         } catch (error) {
-          try { preview.document.body.innerHTML = `<main style="max-width:520px;margin:12vh auto;padding:28px;font-family:Arial,sans-serif;text-align:center"><h1>Unable to prepare labels</h1><p>${html(error.message)}</p></main>`; } catch { }
-          status(root, error.message, true);
+          status(root, `Print preview is ready, but the print-attempt log failed: ${error.message}`, true);
         }
       });
       root.querySelector("[data-download-zpl]").addEventListener("click", () => {
