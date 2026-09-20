@@ -9,6 +9,7 @@ The application is connected to the live Knack app with supported view-based req
 | Inventory item header | Price List (`object_26`), `scene_463` / `view_1003` |
 | Reorder-point detail | Price List Details, `scene_464` / `view_1004` |
 | Inventory ledger | Inventory Transactions (`object_29`), `scene_470` / `view_1008` |
+| Inventory On-Hand page | `scene_475`, Rich Text container `view_1015` |
 
 Items can be found using Supplier SKU (`field_724`) or OR SKU (`field_725`). Transactions are matched using OR SKU (`field_761`), with Item Code (`field_753`) displayed in the history grid.
 
@@ -45,6 +46,8 @@ If the business later reserves raw inventory before an Order Usage transaction i
 - `inventory.css` - desktop and mobile styling
 - `inventory-app.js` - lookup, calculations, alerts, filters, running balances, and scanner workflow
 - `knack-config.js` - verified application, view, and field mappings
+- `knack-inventory-on-hand.js` - page-scoped Next-Gen Knack integration
+- `knack-inventory-on-hand.css` - page-scoped Next-Gen Knack styling
 - `KNACK_DISCOVERY.md` - API discovery record without credentials
 
 The current files can run as an external page or be hosted and embedded into Knack. For a direct Knack deployment, mount the HTML on the intended page and load the CSS/JavaScript from an approved HTTPS host or the Knack custom-code area.
