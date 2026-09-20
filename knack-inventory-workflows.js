@@ -905,27 +905,13 @@
     return `<div class="iw-label-heading"><strong>${html(product.name)}</strong><em>${html(price)}</em></div><span class="iw-label-sku">${html(product.sku || product.supplierSku)}</span>${code128Svg(code)}<b>${html(code)}</b>`;
   }
 
-  function openPrintPreview() {
-    const preview = window.open("", "_blank");
-    if (!preview) return null;
-    try { preview.opener = null; } catch { }
-    preview.document.open();
-    preview.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Preparing Labels</title><style>body{margin:0;padding:32px;font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#f8fafc}main{max-width:520px;margin:12vh auto;padding:28px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.08)}h1{font-size:20px}p{color:#64748b}</style></head><body><main><h1>Preparing barcode labels…</h1><p>The print preview will be ready in a moment.</p></main></body></html>`);
-    preview.document.close();
-    return preview;
-  }
-
   function isIOSPrintDevice(userAgent = globalThis.navigator?.userAgent || "") {
     return /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && (globalThis.navigator?.maxTouchPoints || 0) > 1);
   }
 
-  function isAndroidPrintDevice(userAgent = globalThis.navigator?.userAgent || "") {
-    return /Android/i.test(userAgent);
-  }
-
   function printHelpText() {
     return isIOSPrintDevice()
-      ? "Bluetooth does not make it available in iPhone AirPrint. Preview here, or download a Zebra ZD421 file to send through a compatible Zebra utility."
+      ? "Bluetooth setup does not add the Zebra ZD421 to iPhone AirPrint. The Print button opens iOS printing; use a compatible print service or download a Zebra file if the printer is absent."
       : "Choose the installed Zebra ZD421 and 3 × 2 inch media at 100% scale, or save as PDF. On Android, enable Zebra Print and connect by USB, network, or Bluetooth Classic (not setup-only Bluetooth LE).";
   }
 
@@ -977,42 +963,33 @@
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  function printLabels(entries, preview) {
-    const ios = isIOSPrintDevice();
-    const labels = entries.flatMap(entry =>
+  function labelSheetMarkup(entries) {
+    return entries.flatMap(entry =>
       Array.from({ length: Math.max(1, Math.floor(entry.quantity)) }, () =>
         `<section class="iw-print-label">${labelMarkup(entry.product)}</section>`
       )
     ).join("");
-    const printDocument = preview.document;
-    printDocument.open();
-    printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print Labels</title><style>
-      @page { size: 3in 2in; margin: 0; }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; }
-      .iw-print-toolbar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 14px; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #e5e7eb; background: #fff; color: #475569; font-size: 13px; }
-      .iw-print-toolbar button { min-height: 42px; padding: 0 18px; border: 0; border-radius: 8px; background: #982a86; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-      .iw-print-label { width: 3in; height: 2in; padding: .08in; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; break-after: page; page-break-after: always; }
-      .iw-print-label:last-child { break-after: auto; page-break-after: auto; }
-      .iw-label-heading { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: .05in; }
-      .iw-print-label strong { display: block; min-width: 0; overflow: hidden; font-size: 9pt; line-height: 1.05; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-      .iw-print-label em { flex: none; font-size: 10pt; line-height: 1; font-style: normal; font-weight: 700; }
-      .iw-print-label span { width: 100%; font-size: 7pt; line-height: 1; text-align: left; }
-      .iw-print-label .iw-barcode { display: block; width: 92%; height: .52in; margin: .06in auto; overflow: visible; }
-      .iw-print-label .iw-barcode rect { fill: #000 !important; }
-      .iw-print-label b { font-size: 8pt; line-height: 1; letter-spacing: .04em; }
-      @media screen { body { background: #f1f5f9; } .iw-print-label { margin: 18px auto; background: #fff; box-shadow: 0 3px 12px rgba(15,23,42,.14); } }
-      @media print { .iw-print-toolbar { display: none !important; } .iw-print-label { margin: 0; box-shadow: none; } }
-    </style></head><body><div class="iw-print-toolbar">${ios ? "" : '<button type="button" onclick="window.print()">Print / Save as PDF</button>'}<span>${printHelpText()}</span></div>${labels}</body></html>`);
-    printDocument.close();
-    preview.focus();
-    if (isAndroidPrintDevice()) {
-      // Keep this call in the original tap handler; Android may reject delayed print requests.
-      try { preview.print(); } catch { /* The preview's Print button remains available. */ }
-    } else if (!ios) {
-      setTimeout(() => {
-        try { preview.print(); } catch { }
-      }, 350);
+  }
+
+  function printLabels(entries) {
+    document.getElementById("iw-print-sheet")?.remove();
+    const sheet = document.createElement("div");
+    sheet.id = "iw-print-sheet";
+    sheet.className = "iw-print-sheet";
+    sheet.innerHTML = labelSheetMarkup(entries);
+    document.body.appendChild(sheet);
+    document.body.classList.add("iw-printing");
+    const cleanup = () => {
+      sheet.remove();
+      document.body.classList.remove("iw-printing");
+    };
+    window.addEventListener("afterprint", cleanup, { once: true });
+    try {
+      // Print the current page directly from the tap: no popup or asynchronous API work.
+      window.print();
+    } catch (error) {
+      cleanup();
+      throw error;
     }
   }
 
@@ -1020,7 +997,7 @@
     host.innerHTML = base("Print Labels", "LABEL UI", "", "labels");
     const root = host.querySelector(".iw-shell");
     wireRefresh(root, () => mountLabels(host));
-    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">${isIOSPrintDevice() ? "Preview Labels" : "Print Labels"}</button><details class="iw-zebra-file"><summary>Zebra printer file (fallback)</summary><label>Printer resolution <select data-zpl-dpi><option value="300">300 dpi</option><option value="203">203 dpi</option></select></label><button data-download-zpl type="button">Download 3 × 2 Zebra file</button><small>Send the .zpl file with Zebra Setup Utilities on a computer. This downloads a file; it does not connect to or print on the printer by itself. Use the resolution printed on the printer configuration label.</small></details><p class="iw-note">${printHelpText()} Print attempts from a supported device are logged; printing never changes inventory.</p>`;
+    root.querySelector("[data-main]").innerHTML = `<div class="iw-field-stack"><label>Source<select data-source><option value="Price List">From Price List</option><option value="Receiving Transaction">From Receiving Transaction</option></select></label><label>Scan or search product<div class="iw-scan-control"><input data-search placeholder="Scan item code"><button data-add><span aria-hidden="true">▤</span> Scan</button></div></label></div><p class="iw-section-label">Print queue</p><section class="iw-compact-panel"><div data-queue></div><div class="iw-balance-total"><span>Total labels</span><strong data-total-labels>0</strong></div></section><button data-clear hidden>Clear queue</button><div class="iw-label-settings"><div class="iw-fixed-setting"><span>Label size</span><strong>${LABEL_SIZE}</strong></div><div class="iw-fixed-setting"><span>Printer</span><strong>${LABEL_PRINTER}</strong></div></div><p class="iw-section-label">Preview</p><div class="iw-label-preview" data-preview><span>Barcode preview</span></div><button data-print class="iw-success-button iw-full-button">Print Labels</button><button data-download-zpl type="button" class="iw-download-button iw-full-button">Download Zebra file (optional)</button><details class="iw-zebra-file"><summary>Download settings</summary><label>Printer resolution <select data-zpl-dpi><option value="300">300 dpi</option><option value="203">203 dpi</option></select></label><small>The separate .zpl file is for Zebra utilities; downloading it does not print. Use the resolution on the printer configuration label.</small></details><p class="iw-note">${printHelpText()} Print attempts are logged; printing never changes inventory.</p>`;
     status(root, "Loading live label sources...");
     try {
       const [itemRows, priceRows, txRows, locationRows] = await Promise.all([
@@ -1038,8 +1015,7 @@
       const updatePrintSummary = () => {
         const total = state.queue.reduce((sum, entry) => sum + Math.max(1, Math.floor(entry.quantity)), 0);
         root.querySelector("[data-total-labels]").textContent = number.format(total);
-        const action = isIOSPrintDevice() ? "Preview" : "Print";
-        root.querySelector("[data-print]").textContent = total ? `${action} ${number.format(total)} ${total === 1 ? "Label" : "Labels"}` : `${action} Labels`;
+        root.querySelector("[data-print]").textContent = total ? `Print ${number.format(total)} ${total === 1 ? "Label" : "Labels"}` : "Print Labels";
       };
       const renderQueue = () => {
         const queue = root.querySelector("[data-queue]");
@@ -1085,14 +1061,9 @@
         if (entries.some(entry => !Number.isSafeInteger(Number(entry.quantity)) || Number(entry.quantity) < 1 || Number(entry.quantity) > 999)) {
           return status(root, "Each label quantity must be between 1 and 999.", true);
         }
-        const preview = openPrintPreview();
-        if (!preview) return status(root, "The browser blocked the print preview. Allow pop-ups for apps.knack.com, then try again.", true);
-        try { printLabels(entries, preview); }
-        catch (error) { return status(root, `Unable to prepare labels: ${error.message}`, true); }
-        if (isIOSPrintDevice()) {
-          return status(root, "Label preview opened. Bluetooth pairing alone cannot print from iPhone AirPrint; use a computer with the Zebra installed until an iPhone print service is configured.");
-        }
-        status(root, "Print dialog requested. If it did not open, use Print / Save as PDF in the preview. Select the Zebra ZD421 there.");
+        try { printLabels(entries); }
+        catch (error) { return status(root, `Unable to open printing: ${error.message}`, true); }
+        status(root, "Print dialog requested. Choose the Zebra ZD421 and 3 × 2 inch paper. The separate Download button does not print.");
         try {
           const user = await currentUser();
           for (const entry of entries) {
@@ -1113,7 +1084,7 @@
           }
           state.queue.forEach(entry => { entry.reprint = true; });
         } catch (error) {
-          status(root, `Print preview is ready, but the print-attempt log failed: ${error.message}`, true);
+          status(root, `Print dialog was requested, but the print-attempt log failed: ${error.message}`, true);
         }
       });
       root.querySelector("[data-download-zpl]").addEventListener("click", () => {

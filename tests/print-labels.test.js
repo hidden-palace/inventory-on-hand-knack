@@ -6,87 +6,70 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const source = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "knack-inventory-workflows.js"), "utf8");
-const instrumented = source.replace(/\}\)\(\);\s*$/, "globalThis.labelTest = { LABEL_SIZE, LABEL_PRINTER, printLabels, zebraLabelFile }; })();");
+const styles = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "knack-inventory-workflows.css"), "utf8");
+const instrumented = source.replace(/\}\)\(\);\s*$/, "globalThis.labelTest = { LABEL_SIZE, LABEL_PRINTER, printLabels, labelSheetMarkup, zebraLabelFile }; })();");
 
 function loadLabelCode(userAgent = "Windows") {
-  const timers = [];
+  const nodes = new Map();
+  const listeners = new Map();
+  const classes = new Set();
   const context = {
     navigator: { userAgent, maxTouchPoints: 0 },
     document: {
-      createElement: () => ({ textContent: "" }),
+      createElement: () => ({ textContent: "", innerHTML: "", remove() { nodes.delete(this.id); } }),
+      getElementById: id => nodes.get(id) || null,
+      body: {
+        classList: { add: value => classes.add(value), remove: value => classes.delete(value) },
+        appendChild(node) { nodes.set(node.id, node); }
+      },
       head: { appendChild() {} },
       readyState: "loading",
       addEventListener() {}
     },
-    setTimeout(callback) { timers.push(callback); }
+    addEventListener(name, callback) { listeners.set(name, callback); },
+    print() { context.printCalls += 1; },
+    printCalls: 0,
+    setTimeout() {}
   };
+  context.window = context;
   context.globalThis = context;
   vm.runInNewContext(instrumented, context);
-  return { ...context.labelTest, timers };
+  return { ...context.labelTest, context, nodes, listeners, classes };
 }
 
-test("ZD421 labels are fixed at 3 by 2 inches and retain barcode and price", () => {
-  const { LABEL_SIZE, LABEL_PRINTER, printLabels } = loadLabelCode();
+test("main Print button prepares two 3 by 2 labels and invokes current-page printing", () => {
+  const { LABEL_SIZE, LABEL_PRINTER, printLabels, context, nodes, classes } = loadLabelCode("Android 15");
   assert.equal(LABEL_SIZE, "3 × 2 inch");
   assert.equal(LABEL_PRINTER, "Zebra ZD421");
 
-  let markup = "";
-  const preview = {
-    document: {
-      open() {},
-      write(value) { markup += value; },
-      close() {}
-    },
-    focus() {}
-  };
   printLabels([{ quantity: 2, product: {
     name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95
-  } }], preview);
+  } }]);
 
-  assert.match(markup, /@page \{ size: 3in 2in; margin: 0; \}/);
+  const markup = nodes.get("iw-print-sheet").innerHTML;
+  assert.equal(context.printCalls, 1);
+  assert.equal(classes.has("iw-printing"), true);
+  assert.match(styles, /@page \{ size: 3in 2in; margin: 0; \}/);
   assert.equal((markup.match(/<section class="iw-print-label">/g) || []).length, 2);
   assert.match(markup, /Code 128 barcode 41636/);
   assert.match(markup, /\$29\.95/);
-  assert.match(markup, /Zebra ZD421/);
-  assert.doesNotMatch(markup, /size: 2in 1in|size: 4in 2in/);
+  assert.match(styles, /body\.iw-printing > :not\(#iw-print-sheet\) \{ display: none !important; \}/);
 });
 
-test("iPhone label preview does not automatically open AirPrint for a paired ZD421", () => {
-  const { printLabels, timers } = loadLabelCode("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)");
-  let markup = "";
-  printLabels([{ quantity: 1, product: { name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95 } }], {
-    document: { open() {}, write(value) { markup += value; }, close() {} },
-    focus() {}
-  });
-  assert.equal(timers.length, 0);
-  assert.match(markup, /Bluetooth does not make it available in iPhone AirPrint/);
-  assert.doesNotMatch(markup, /onclick="window\.print\(\)"/);
+test("print job is cleared after the dialog closes", () => {
+  const { printLabels, nodes, listeners, classes } = loadLabelCode();
+  printLabels([{ quantity: 1, product: { name: "Test", barcode: "41636", sku: "ABC", price: 1 } }]);
+  listeners.get("afterprint")();
+  assert.equal(nodes.has("iw-print-sheet"), false);
+  assert.equal(classes.has("iw-printing"), false);
 });
 
-test("Android requests the print dialog immediately and retains a manual Print button", () => {
-  const { printLabels, timers } = loadLabelCode("Mozilla/5.0 (Linux; Android 15; Mobile) Chrome/120");
-  let markup = "";
-  let printCalls = 0;
-  printLabels([{ quantity: 1, product: { name: "Test Vase", barcode: "41636", sku: "UTC-CTR-003", price: 29.95 } }], {
-    document: { open() {}, write(value) { markup += value; }, close() {} },
-    focus() {},
-    print() { printCalls += 1; }
-  });
-  assert.equal(printCalls, 1);
-  assert.equal(timers.length, 0);
-  assert.match(markup, /onclick="window\.print\(\)"/);
-  assert.match(markup, /@page \{ size: 3in 2in; margin: 0; \}/);
-});
-
-test("Android keeps the preview usable when the immediate print call fails", () => {
-  const { printLabels } = loadLabelCode("Android 15");
-  let markup = "";
-  assert.doesNotThrow(() => printLabels([{ quantity: 1, product: { name: "Test", barcode: "41636", sku: "ABC", price: 1 } }], {
-    document: { open() {}, write(value) { markup += value; }, close() {} },
-    focus() {},
-    print() { throw new Error("No print service"); }
-  }));
-  assert.match(markup, /Print \/ Save as PDF/);
+test("print failures clean the page and surface an error", () => {
+  const { printLabels, context, nodes, classes } = loadLabelCode("Android 15");
+  context.print = () => { throw new Error("Printing unavailable"); };
+  assert.throws(() => printLabels([{ quantity: 1, product: { name: "Test", barcode: "41636", sku: "ABC", price: 1 } }]), /Printing unavailable/);
+  assert.equal(nodes.has("iw-print-sheet"), false);
+  assert.equal(classes.has("iw-printing"), false);
 });
 
 test("ZPL fallback preserves 3 by 2 media, price, Code 128 and requested copies at either DPI", () => {
